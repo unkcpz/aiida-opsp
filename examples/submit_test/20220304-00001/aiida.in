@@ -1,0 +1,26 @@
+# ATOM AND REFERENCE CONFIGURATION
+# atsym, z, nc, nv, iexc   psfile
+Li 3 0 2 3 upf
+#
+# n, l, f  (nc+nv lines)
+1 0 2.0
+2 0 1.0
+#
+# PSEUDOPOTENTIAL AND OPTIMIZATION
+# lmax
+1
+#
+# l, rc, ep, ncon, nbas, qcut  (lmax+1 lines, l's must be in order)
+0 2.0 0 0 4 8 6.0
+1 3.0 0.1 4 8 4.0
+#
+# LOCAL POTENTIAL
+4 5 1.0 0.0
+#
+# VANDERBILT-KLEINMAN-BYLANDER PROJECTORs
+0 2 0.0
+1 2 0.75
+#
+# MODEL CORE CHARGE
+0 0.0
+#

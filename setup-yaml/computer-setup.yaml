@@ -1,0 +1,12 @@
+label: "localhost"
+hostname: "localhost"
+description: EPFL theospc38 computer for test purpose
+transport: "core.local"
+scheduler: "core.direct"
+work_dir: "/scratch/{username}/aiida_run/"
+shebang: "#!/bin/bash"
+mpirun_command: "mpirun -np {tot_num_mpiprocs}"
+default_memory_per_machine: 20480
+mpiprocs_per_machine: 8
+prepend_text: " "
+append_text: " "

@@ -1,0 +1,55 @@
+[build-system]
+requires = ['flit_core >=3.4,<4']
+build-backend = 'flit_core.buildapi'
+
+[project]
+name = 'aiida-opsp'
+dynamic = ['version']
+description = 'The AiiDA plugin for optimize psp EA search'
+authors = [{name = 'Jusong Yu', email = 'jusong.yu@epfl.ch'}]
+readme = 'README.md'
+license = {file = 'LICENSE.txt'}
+classifiers = [
+    'Framework :: AiiDA',
+    'License :: OSI Approved :: MIT License',
+    'Programming Language :: Python',
+    'Programming Language :: Python :: 3.6',
+    'Programming Language :: Python :: 3.7',
+    'Programming Language :: Python :: 3.8',
+    'Programming Language :: Python :: 3.9',
+]
+keywords = ['aiida', 'workflows']
+requires-python = '>=3.8'
+dependencies = [
+    # 'aiida_core~=2.0',
+    'numpy',
+    'importlib_resources'
+]
+
+[project.optional-dependencies]
+pre-commit = [
+    'pre-commit~=2.17',
+    'pylint~=2.12.2',
+    'pylint-aiida~=0.1.1',
+    'toml',
+]
+tests = [
+    'pgtest~=1.3',
+    'pytest~=6.0',
+    'pytest-regressions~=1.0'
+]
+
+[project.entry-points."aiida.calculations"]
+"opsp.pseudo.oncv" = "aiida_opsp.calcjob:OncvPseudoCalculation"
+
+[project.entry-points."aiida.parsers"]
+"opsp.pseudo.oncv" = "aiida_opsp.parser:OncvPseudoParser"
+
+[tool.flit.module]
+name = 'aiida_opsp'
+
+[tool.flit.sdist]
+exclude = [
+    'docs/',
+    'tests/',
+]

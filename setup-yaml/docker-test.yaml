@@ -1,0 +1,12 @@
+label: "docker-bash-add"
+description: "doing bash"
+input_plugin: "core.arithmetic.add"
+on_container: true
+on_computer: true
+image: "ubuntu"
+container_engine_command: "docker run -v $PWD:/workdir:rw -w /workdir {image} sh -c '{exec_str}'"
+remote_abs_path: "/bin/bash"
+computer: "localhost"
+use_double_quotes: true
+prepend_text: " "
+append_text: " "

@@ -1,0 +1,1 @@
+{"codes_info": [{"code_uuid": "50bc5f87-4857-4e2a-b74f-ccff7efcdc1a", "stdin_name": "aiida.in", "stdout_name": "aiida.out", "cmdline_params": ["/home/jyu/Projects/WP-OPSP/bin/oncvpsp.x"]}], "retrieve_list": ["aiida.out", "_scheduler-stdout.txt", "_scheduler-stderr.txt"], "uuid": "aee427fd-252a-481f-aea8-636240d46944"}
