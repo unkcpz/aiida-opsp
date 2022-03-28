@@ -4,7 +4,12 @@ from aiida import orm
 from aiida_opsp.calcjob import OncvPseudoCalculation
 
 computer = orm.load_computer('localhost')
-code = orm.Code(label='oncv4-0', remote_computer_exec=[computer, '/home/jyu/Projects/WP-OPSP/bin/oncvpsp.x'], input_plugin_name='opsp.pseudo.oncv')
+code = orm.Code(label='oncv4-0', 
+                remote_computer_exec=[
+                    computer, 
+                    '/home/jyu/Projects/WP-OPSP/bin/oncvpsp.x'
+                ], 
+                input_plugin_name='opsp.pseudo.oncv')
 
 input_parameters = {
     'atom_info': ['Li', 3, 0, 2, 3, 'upf'],

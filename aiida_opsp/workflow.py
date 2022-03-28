@@ -33,13 +33,13 @@ class GeneticAlgorithmWorkChain(WorkChain):
         
     def start(self):
         self.ctx.num_generation = 50
-        self.ctx.num_parents_mating = 3
-        self.ctx.sol_per_pop = 5
+        self.ctx.num_parents_mating = 12
+        self.ctx.sol_per_pop = 20
         self.ctx.num_genes = 6
-        self.ctx.keep_parents = 1
-        self.ctx.mutation_num_genes = 2
+        self.ctx.keep_parents = 4
+        self.ctx.mutation_num_genes = 6
         self.ctx.num_offspring = self.ctx.sol_per_pop - self.ctx.keep_parents
-        self.ctx.crossover_probability = 0.5
+        self.ctx.crossover_probability = 0.8
         self.ctx.gene_space = [{'low': -10.0, 'high': 10.0}] * self.ctx.num_genes
         self.ctx.gene_type = [float, float, float, float, float, float]
         
@@ -47,7 +47,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
         
         # population
         np.random.seed(0)
-        self.ctx.population = np.random.uniform(low=-10.0, high=10, size=(5, 6))
+        self.ctx.population = np.random.uniform(low=-10.0, high=10, size=(20, 6))
         self.ctx.last_generation_parents = None
         self.ctx.last_generation_parents_indices = None
         self.ctx.previous_generation_fitness = None
@@ -64,7 +64,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
             return True
 
     def fitness(self):
-        self.report('on fitness')
+        self.report(f'On fitness at generation: {self.ctx.current_generation}')
         
         self.ctx.last_generation_fitness = _cal_pop_fitness(self.ctx.population,
                                                 self.ctx.last_generation_parents,
@@ -79,7 +79,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
         self.report(f'PRED SUM: {prediction}')
         self.report(f'BEST: sol={self.ctx.best_solution}, fitness={self.ctx.best_solution_fitness}')
     def parents(self):
-        self.report('on parents')
+        # self.report('on parents')
         
         self.ctx.last_generation_parents, self.ctx.last_generation_parents_indices = _rank_selection(
             self.ctx.population, 
@@ -87,7 +87,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
             self.ctx.num_parents_mating)
 
         # import ipdb; ipdb.set_trace()
-        self.report(f'{self.ctx.last_generation_parents}')
+        # self.report(f'{self.ctx.last_generation_parents}')
     
     def crossover(self):
         self.report('on crossover')
@@ -97,7 +97,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
                                                             crossover_probability=self.ctx.crossover_probability)
         
     def mutation(self):
-        self.report('on mutation')
+        # self.report('on mutation')
         
         self.ctx.last_generation_offspring_mutation = _mutation_by_space(self.ctx.last_generation_offspring_crossover, 
                                                                          self.ctx.num_genes, 
@@ -106,8 +106,8 @@ class GeneticAlgorithmWorkChain(WorkChain):
                                                                          self.ctx.gene_type)
     
     def generation(self):
-        self.report('on generation')
-        self.report(f'The current generation is: {self.ctx.current_generation}')
+        # self.report('on generation')
+        # self.report(f'The current generation is: {self.ctx.current_generation}')
         
         # import ipdb; ipdb.set_trace()
         parents_to_keep, _ = _steady_state_selection(
@@ -123,7 +123,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
         self.ctx.current_generation += 1
     
     def stop(self):
-        self.report('on stop')
+        # self.report('on stop')
         g = self.ctx.current_generation
         self.out('result', orm.Dict(dict={
                 'current_generation': g,

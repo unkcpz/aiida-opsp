@@ -10,4 +10,4 @@ def run():
 
 if __name__ == '__main__':
     res, pk = run()
-    print(res['result'].get_dict(), pk)
+    # print(res['result'].get_dict(), pk)
