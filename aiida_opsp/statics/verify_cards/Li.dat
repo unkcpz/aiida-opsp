@@ -1,0 +1,12 @@
+# TEST CONFIGURATIONS
+# ncnf
+    2
+#
+#   nvcnf (repeated ncnf times)
+#   n, l, f  (nvcnf lines, repeated follwing nvcnf's ncnf times)
+    1
+    1    0    2.0
+#
+    2
+    1    0    2.0
+    2    1    1.0
