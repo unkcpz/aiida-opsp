@@ -1,0 +1,15 @@
+LICENSE
+README.md
+pyproject.toml
+setup.cfg
+setup.py
+aiida_opsp/__init__.py
+aiida_opsp/calcjob.py
+aiida_opsp/parser.py
+aiida_opsp/workflow.py
+aiida_opsp.egg-info/PKG-INFO
+aiida_opsp.egg-info/SOURCES.txt
+aiida_opsp.egg-info/dependency_links.txt
+aiida_opsp.egg-info/entry_points.txt
+aiida_opsp.egg-info/requires.txt
+aiida_opsp.egg-info/top_level.txt

@@ -1,0 +1,36 @@
+
+
+def test_oncv_default(fixture_localhost, generate_calc_job_node, generate_parser, generate_inputs_oncv, data_regression):
+    """Test oncv parser
+    """
+    name = 'default'
+    entry_point_calc_job = 'opsp.pseudo.oncv'
+    entry_point_parser = 'opsp.pseudo.oncv'
+
+    node = generate_calc_job_node(entry_point_calc_job, fixture_localhost, name, generate_inputs_oncv(True, True))
+    parser = generate_parser(entry_point_parser)
+    results, calcfunction = parser.parse_from_node(node, store_provenance=False)
+
+    assert calcfunction.is_finished, calcfunction.exception
+    assert calcfunction.is_finished_ok, calcfunction.exit_message
+    assert 'output_parameters' in results
+    assert 'output_pseudo' in results
+
+    data_regression.check({
+        'output_parameters': results['output_parameters'].get_dict(),
+    })
+    
+def test_oncv_no_pseudo_dump(fixture_localhost, generate_calc_job_node, generate_parser, generate_inputs_oncv, data_regression):
+    """Test oncv parser
+    """
+    name = 'no_pseudo_dump'
+    entry_point_calc_job = 'opsp.pseudo.oncv'
+    entry_point_parser = 'opsp.pseudo.oncv'
+
+    node = generate_calc_job_node(entry_point_calc_job, fixture_localhost, name, generate_inputs_oncv(True, False))
+    parser = generate_parser(entry_point_parser)
+    results, calcfunction = parser.parse_from_node(node, store_provenance=False)
+
+    assert calcfunction.is_finished, calcfunction.exception
+    assert calcfunction.is_finished_ok, calcfunction.exit_message
+    assert 'output_pseudo' not in results

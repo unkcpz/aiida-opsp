@@ -1,0 +1,23 @@
+Metadata-Version: 2.1
+Name: aiida-opsp
+Version: 22.3.0
+Summary: The AiiDA plugin for optimize psp EA search
+Author: Jusong Yu
+Author-email: jusong.yu@epfl.ch
+License: MIT
+Platform: UNKNOWN
+Classifier: Framework :: AiiDA
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Provides-Extra: dev
+Provides-Extra: tests
+License-File: LICENSE
+
+# aiida-opsp
+
+

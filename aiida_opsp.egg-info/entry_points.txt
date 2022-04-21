@@ -1,0 +1,5 @@
+[aiida.calculations]
+opsp.pseudo.oncv = aiida_opsp.calcjob:OncvPseudoCalculation
+
+[aiida.parsers]
+opsp.pseudo.oncv = aiida_opsp.parser:OncvPseudoParser

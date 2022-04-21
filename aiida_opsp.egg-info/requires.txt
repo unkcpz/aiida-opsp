@@ -1,0 +1,11 @@
+importlib_resources~=5.4
+numpy~=1.22
+
+[dev]
+bumpver==2021.1114
+pre-commit==2.11.1
+
+[tests]
+pgtest~=1.3
+pytest~=6.0
+pytest-regressions~=2.3

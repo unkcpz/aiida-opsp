@@ -1,0 +1,39 @@
+# atsym z nc nv iexc psfile
+Li 3 0 2 4 upf
+# n l f
+1 0 2.0
+2 0 1.0
+# PSEUDOPOTENTIAL AND OPTIMIZATION
+# lmax
+1
+#
+# l, rc, ep, ncon, nbas, qcut  (lmax+1 lines, l's must be in order)
+0 2.2 -0.0 3 7 5.0
+1 2.2 -0.0 3 7 7.0
+#
+# LOCAL POTENTIAL
+4 5 2.2 2
+#
+# VANDERBILT-KLEINMAN-BYLANDER PROJECTORs
+0 2 2.0
+1 2 3.5
+#
+# MODEL CORE CHARGE
+3 5.0 1.4
+#
+# epsh1 epsh2 depsh
+-12.0 12.0 0.02
+# rlmax drl
+4.4 0.01
+# TEST CONFIGURATIONS
+# ncnf
+    2
+#
+#   nvcnf (repeated ncnf times)
+#   n, l, f  (nvcnf lines, repeated follwing nvcnf's ncnf times)
+    1
+    1    0    2.0
+#
+    2
+    1    0    2.0
+    2    1    1.0

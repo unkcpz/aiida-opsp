@@ -1,0 +1,21 @@
+output_parameters:
+  tc_0:
+    excitation_error: -2.13e-14
+    idx: '0'
+    state_error:
+    - 8.57e-07
+    - 4.9e-07
+    state_error_avg: 6.735e-07
+  tc_1:
+    excitation_error: 0.195
+    idx: '1'
+    state_error:
+    - 0.00164
+    state_error_avg: 0.00164
+  tc_2:
+    excitation_error: 0.0657
+    idx: '2'
+    state_error:
+    - 0.00208
+    - 3.57e-07
+    state_error_avg: 0.0010401784999999998
