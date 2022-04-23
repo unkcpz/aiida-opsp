@@ -10,7 +10,7 @@ function_inputs = [4,-2,3.5,5,-11,-4.7] # Function inputs.
 desired_output = 44 # Function output.
 
 class GeneticAlgorithmWorkChain(WorkChain):
-    """WorkChain to run demo GA """
+    """WorkChain to run GA """
     
     @classmethod
     def define(cls, spec):

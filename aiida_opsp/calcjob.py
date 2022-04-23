@@ -32,6 +32,12 @@ class OncvPseudoCalculation(CalcJob):
         spec.output('output_parameters', valid_type=orm.Dict)
         spec.output('output_pseudo', valid_type=UpfData, required=False)
         
+        spec.exit_code(501, 'ERROR_PSPOT_HAS_NODE',
+            message='The pseudo wave function has node.')   # TODO can record which l is wrong and used to tune inputs of GA
+        spec.exit_code(502, 'ERROR_LSCHVKBB',
+            message='The lschvkbb error.')  
+        
+        
         spec.inputs['metadata']['options']['input_filename'].default = 'aiida.in'
         spec.inputs['metadata']['options']['output_filename'].default = 'aiida.out'
         spec.inputs['metadata']['options']['parser_name'].default = 'opsp.pseudo.oncv'
@@ -144,7 +150,7 @@ class OncvPseudoCalculation(CalcJob):
         inp.append('# MODEL CORE CHARGE')
         icmod = nlcc_settings.get('icmod')
         fcfact = nlcc_settings.get('fcfact')
-        rcfact = nlcc_settings.get('rcfact', None)
+        rcfact = nlcc_settings.get('rcfact', '')
         lst = [icmod, fcfact, rcfact]
         inp.append(' '.join(str(e) for e in lst))
         inp.append('#')

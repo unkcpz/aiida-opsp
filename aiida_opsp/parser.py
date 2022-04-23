@@ -22,8 +22,15 @@ class OncvPseudoParser(Parser):
         
         # Separate the input string into separate lines
         data_lines = stdout.split('\n') 
-        
+        logs = {'error': []}
         for count, line in enumerate(data_lines):
+            
+            # ERROR_PSPOT_HAS_NODE
+            if 'pseudo wave function has node' in line:
+                logs['error'].append('ERROR_PSPOT_HAS_NODE')
+                
+            if 'lschvkbb ERROR' in line:
+                logs['error'].append('ERROR_LSCHVKBB')
             
             # line idx for PSP UPF part
             if 'Begin PSP_UPF' in line:
@@ -58,6 +65,13 @@ class OncvPseudoParser(Parser):
             
             pseudo = UpfData.get_or_create(io.BytesIO(upf_txt.encode('utf-8')))
             self.out('output_pseudo', pseudo)
+            
+        for error_label in [
+            'ERROR_PSPOT_HAS_NODE',
+            'ERROR_LSCHVKBB',
+        ]:
+            if error_label in logs['error']:
+                return self.exit_codes.get(error_label)
                 
 def parse_configuration_test(test_idx, test_ctx):
     out = {}
