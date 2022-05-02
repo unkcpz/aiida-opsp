@@ -1,2 +1,4 @@
 examples/submit_test/*
 setup-yaml/*
+
+*.pyc

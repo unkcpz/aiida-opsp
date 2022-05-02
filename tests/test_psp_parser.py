@@ -76,3 +76,25 @@ def test_oncv_error_lschvkbb(fixture_localhost, generate_calc_job_node, generate
     data_regression.check({
         'output_parameters': results['output_parameters'].get_dict(),
     })
+    
+def test_oncv_warning_test_lschvkbb(fixture_localhost, generate_calc_job_node, generate_parser, generate_inputs_oncv, data_regression):
+    """Test oncv parser
+    """
+    name = 'warning_lschvkbb_not_converge'
+    entry_point_calc_job = 'opsp.pseudo.oncv'
+    entry_point_parser = 'opsp.pseudo.oncv'
+
+    node = generate_calc_job_node(entry_point_calc_job, fixture_localhost, name, generate_inputs_oncv(True, False))
+    parser = generate_parser(entry_point_parser)
+    results, calcfunction = parser.parse_from_node(node, store_provenance=False)
+
+    assert calcfunction.is_finished, calcfunction.exception
+    assert calcfunction.is_finished_ok, calcfunction.exit_message
+    assert 'output_pseudo' not in results
+
+    # TODO: it is now empty, can add some general metadata instead of output parsed only
+    data_regression.check({
+        'output_parameters': results['output_parameters'].get_dict(),
+    })
+    
+    

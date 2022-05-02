@@ -1,6 +1,7 @@
 from aiida.parsers import Parser
 from aiida import orm
 import io
+import math
 
 from aiida import plugins
 
@@ -46,7 +47,8 @@ class OncvPseudoParser(Parser):
                 i = count
                 
                 while True:
-                    if 'PSP excitation error' in data_lines[i]:
+                    if ('PSP excitation error' in data_lines[i]
+                    or 'WARNING no output for configuration' in data_lines[i]):
                         end_count = i
                         break
                     
@@ -80,7 +82,7 @@ def parse_configuration_test(test_idx, test_ctx):
     
     # error of every state
     state_error = []
-    for count, line in enumerate(test_ctx[1:]):
+    for count, line in enumerate(test_ctx[:]):
         if not line:
             # When encounter blank line where separate error of every angular momentum
             # and excitatior error summary, go to last line and parse excitation error
@@ -88,6 +90,17 @@ def parse_configuration_test(test_idx, test_ctx):
             out['excitation_error'] = float(excitation_line.split()[-1].replace('D', 'E'))
             
             break
+        
+        if 'n   l     f' in line:
+            continue
+        
+        if 'WARNING lschvkbb convergence error' in line:
+            # the test failed because of lschvkbk convergence error
+            # regard it as very bad pseudopotential (the less value the better pseudo)
+            out['excitation_error'] = 99.
+            out['state_error_avg'] = 99.
+            
+            return out
         
         # parse line of angular momentum
         n, l, f, eae, eps, diff = line.split()

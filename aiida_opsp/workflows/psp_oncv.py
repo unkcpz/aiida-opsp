@@ -60,17 +60,13 @@ class OncvPseudoWrapWorkChain(WorkChain):
                 d['tc_2']['state_error_avg']) / 3
         
         # GA need use max for best results error close to 0 is max
-        result = -result
+        result = -abs(result)
         
         self.out('result', orm.Float(result).store())
         
         
 def get_inputs(rc_s, qcut_s):
-    computer = orm.load_computer('localhost')
-    code = orm.Code(
-        label='oncv4-0', 
-        remote_computer_exec=[computer, '/home/jyu/Projects/WP-OPSP/bin/oncvpsp.x'], 
-        input_plugin_name='opsp.pseudo.oncv')
+    code = orm.load_code('oncv4@localhost0')
 
     conf_name = orm.Str('Li-s')
     angular_momentum_settings = orm.Dict(

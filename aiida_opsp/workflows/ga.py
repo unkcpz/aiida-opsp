@@ -88,7 +88,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
         
     def _init_population(self, num_pop, gene_space, gene_type, seed):
         """return numpy array"""
-        random.seed(seed)
+        random.seed(f'init_pop_{seed}')
         
         # set an unassigned array
         pop = np.empty([num_pop, len(gene_space)], dtype=float)
@@ -193,7 +193,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
                 else:
                     return self.exit_codes.ERROR_EVALUATE_PROCESS_FAILED
             else:
-                outputs[idx] = eval_proc.outputs['result']
+                outputs[idx] = eval_proc.outputs['result'].value
             
         self.ctx.fitness = outputs
         self.ctx.best_solution = self._get_best_solution(outputs)
@@ -219,6 +219,10 @@ class GeneticAlgorithmWorkChain(WorkChain):
     def breed(self):
         """breed new generation"""
         self.ctx.current_generation += 1    # IMPORTANT, otherwise infinity loop
+        self.ctx.seed += 1 # IMPORTANT the seed should update for every generation otherwise mutate offspring is the same
+        
+        self.report(f'population: {self.ctx.population}')
+        self.report(f'fitness: {self.ctx.fitness}')
         
         # keep and mating parents selection
         keep_parents, mating_parents = _rank_selection(
@@ -243,7 +247,8 @@ class GeneticAlgorithmWorkChain(WorkChain):
         
         # population generation: update ctx population for next generation
         self.ctx.population = np.vstack((keep_parents, mut_offspring))
-        
+        self.report(f'new population: {self.ctx.population}')
+
     
     def finalize(self):
         self.report('on stop')
@@ -277,7 +282,7 @@ def _rank_selection(population, fitness, num_keep_parents, num_mating_parents):
     return keep_parents, mating_parents
 
 def _crossover(parents, num_offsprings, seed):
-    random.seed(seed)
+    random.seed(f'crossover_{seed}')
     
     num_parents, num_genes = parents.shape
     offspring = np.empty((num_offsprings, num_genes), dtype=object)
@@ -295,10 +300,10 @@ def _crossover(parents, num_offsprings, seed):
     return offspring
 
 def _mutate(inds, mutate_probability, gene_space, gene_type, seed):
-    random.seed(seed)
-        
-    mut_inds = np.empty_like(inds)
-    num_inds, num_genes = inds.shape
+    random.seed(f'mutate_{seed}')
+    
+    num_inds, num_genes = inds.shape    
+    mut_inds = np.empty([num_inds, num_genes], dtype=float)
     for i in range(num_inds):
         for j in range(num_genes):
             space = gene_space[j]
@@ -309,7 +314,7 @@ def _mutate(inds, mutate_probability, gene_space, gene_type, seed):
                 
                 if gene_type[j] == 'int':
                     value = round(value)
-                mut_inds[i, j] = value
+                mut_inds[i, j] = round(value, 4)
             else:
                 mut_inds[i, j] = inds[i, j]
                         
