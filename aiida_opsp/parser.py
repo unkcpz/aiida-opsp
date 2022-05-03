@@ -1,11 +1,32 @@
+from unittest import result
 from aiida.parsers import Parser
 from aiida import orm
 import io
-import math
+import tempfile
+import numpy as np
+from scipy.integrate import cumtrapz
+import os
+from abipy.ppcodes.oncv_parser import OncvParser
 
 from aiida import plugins
 
 UpfData = plugins.DataFactory('pseudo.upf')
+
+def compute_crop_l1err(atan_logders, emin, emax):
+    max_l1err = 0.0
+    for l in atan_logders.ae:
+        f1, f2 = atan_logders.ae[l], atan_logders.ps[l]
+        abs_diff = np.abs(f1.values - f2.values)
+        
+        # crop
+        condition = (emin < f1.energies) * (f1.energies < emax)
+        energies = np.extract(condition, f1.energies)
+        abs_diff = np.extract(condition, abs_diff)
+        
+        integ = cumtrapz(abs_diff, x=energies) / (energies[-1] - energies[0])
+        max_l1err = max(max_l1err, integ[-1])
+        
+    return float(max_l1err)
 
 class OncvPseudoParser(Parser):
     """Parser for `OncvPseudoCalculation` parse output to pseudo and verifi results"""
@@ -18,8 +39,20 @@ class OncvPseudoParser(Parser):
         with output_folder.open(self.node.get_option('output_filename'), 'r') as handle:
             stdout = handle.read()
         
+        with tempfile.NamedTemporaryFile() as fp:
+            fp.write(stdout.encode('utf-8'))
+            fpath = fp.name
+            abi_parser = OncvParser(fpath)
+            abi_parser.scan()
+            
+            crop_0_5_atan_logder_l1err = compute_crop_l1err(abi_parser.atan_logders, 0., 5)
+            results = abi_parser.get_results()
         
         output_parameters = {}
+        
+        output_parameters['crop_0_5_atan_logder_l1err'] = crop_0_5_atan_logder_l1err
+        output_parameters['max_atan_logder_l1err'] = float(results['max_atan_logder_l1err'])
+        output_parameters['max_ecut'] = float(results['max_ecut'])
         
         # Separate the input string into separate lines
         data_lines = stdout.split('\n') 

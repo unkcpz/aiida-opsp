@@ -1,4 +1,7 @@
 output_parameters:
+  crop_0_5_atan_logder_l1err: 0.02905401411290322
+  max_atan_logder_l1err: 0.06660968473728118
+  max_ecut: 35.395081
   tc_0:
     excitation_error: 2.13e-14
     idx: '0'
