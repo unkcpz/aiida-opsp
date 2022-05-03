@@ -4,13 +4,16 @@ from aiida.engine import ToContext
 from aiida_opsp.calcjob import OncvPseudoCalculation
 
 
-class OncvPseudoWrapWorkChain(WorkChain):
+class OncvPseudoBaseWorkChain(WorkChain):
+    """Wrap of OncvPseudoCalculation calcjob
+    calculate and output `results` as result_key for GA and add error handler"""
     
     @classmethod
     def define(cls, spec):
-        super(OncvPseudoWrapWorkChain, cls).define(spec)
+        super(OncvPseudoBaseWorkChain, cls).define(spec)
 
-        spec.input('parameters', valid_type=orm.Dict)    # rc_s, qcut_s
+        spec.expose_inputs(OncvPseudoCalculation, exclude=['metadata'])
+        spec.expose_outputs(OncvPseudoCalculation)
         spec.output('result', valid_type=orm.Float)
 
         spec.outline(
@@ -24,12 +27,8 @@ class OncvPseudoWrapWorkChain(WorkChain):
 
     def evaluate(self):
         # This is a bit improper: The new value should be created in a calculation.
-        parameters = self.inputs.parameters.get_dict()
-        rc_s = parameters['rc_s']
-        qcut_s = parameters['qcut_s']
-        
-        inputs = get_inputs(rc_s, qcut_s)
-        
+        inputs = self.exposed_inputs(OncvPseudoCalculation)
+        # import ipdb; ipdb.set_trace()
         running = self.submit(OncvPseudoCalculation, **inputs)
         
         return ToContext(oncvwf=running)
@@ -51,9 +50,13 @@ class OncvPseudoWrapWorkChain(WorkChain):
                 )
                 return self.exit_codes.ERROR_SUB_PROCESS_FAILED_ONCV
         
+        self.out_many(
+            self.exposed_outputs(workchain, OncvPseudoCalculation)
+        )
+        
         # a very experiment way to define evaluate value for accuracy of psp.
         g_factor = 1000 # the factor (weight) for ground state error, we what the ground state described accurate 
-        d = output_parameters = workchain.outputs.output_parameters
+        d = workchain.outputs.output_parameters
         self.report(d.get_dict())
         result = (d['tc_0']['state_error_avg'] * g_factor + \
                 d['tc_1']['state_error_avg'] + \
@@ -64,64 +67,3 @@ class OncvPseudoWrapWorkChain(WorkChain):
         
         self.out('result', orm.Float(result).store())
         
-        
-def get_inputs(rc_s, qcut_s):
-    code = orm.load_code('oncv4@localhost0')
-
-    conf_name = orm.Str('Li-s')
-    angular_momentum_settings = orm.Dict(
-        dict={
-            's': {
-                'rc': rc_s,
-                'ncon': 4,
-                'nbas': 8,
-                'qcut': qcut_s,
-                'nproj': 2,
-                'debl': 1.0,
-            },
-            'p': {
-                'rc': 1.1,
-                'ncon': 4,
-                'nbas': 8,
-                'qcut': 9.0,
-                'nproj': 2,
-                'debl': 1.0,
-            }, 
-        }
-    )
-    local_potential_settings = orm.Dict(
-        dict={
-            'llcol': 4, # fix
-            'lpopt': 5, # 1-5, algorithm enum set
-            'rc(5)': 1.1,
-            'dvloc0': 0.0,
-        }
-    )
-    nlcc_settings = orm.Dict(
-        dict={
-            'icmod': 0,
-            'fcfact': 0.25,
-        }
-    )
-    inputs = {
-        'code': code,
-        'conf_name': conf_name,
-        'lmax': orm.Int(1),
-        'angular_momentum_settings': angular_momentum_settings,
-        'local_potential_settings': local_potential_settings,
-        'nlcc_settings': nlcc_settings,
-        'run_atomic_test': orm.Bool(True),
-        'dump_psp': orm.Bool(False),
-        'metadata': {
-            'options': {
-                'resources': {
-                    'num_machines': int(1)
-                },
-                'max_wallclock_seconds': int(60),
-                'withmpi': False,
-            },
-            # 'dry_run':True,
-        }
-    }
-    
-    return inputs

@@ -10,6 +10,10 @@ from aiida.engine.persistence import ObjectLoader
 from functools import singledispatch
 import math
 
+from plumpy.utils import AttributesFrozendict
+
+from aiida.orm.nodes.data.base import to_aiida_type
+
 
 # Generic process evaluation the code is ref from aiida-optimize
 _YAML_IDENTIFIER = '!!YAML!!'
@@ -59,8 +63,10 @@ class GeneticAlgorithmWorkChain(WorkChain):
         spec.input('parameters', valid_type=orm.Dict)
         spec.input('evaluate_process', help='Process which produces the result to be optimized.',
             **PROCESS_INPUT_KWARGS)
-        spec.input('input_mapping', valid_type=orm.List)    # map gene to input of evaluate process in oder
-        spec.input('output_mapping', valid_type=orm.Str)    # name of output of evaluate process to be the result for fitness
+        spec.input('input_nested_keys', valid_type=orm.List)    # map gene to input of evaluate process in oder
+        spec.input('result_key', valid_type=orm.Str)    # name of key to be the result for fitness
+        spec.input_namespace('fixture_inputs', required=False, dynamic=True)  # The fixed input parameters that will combined with change parameters
+        
         spec.outline(
             cls.start,  # prepare init population and parameters
             while_(cls.not_finished)(
@@ -138,17 +144,18 @@ class GeneticAlgorithmWorkChain(WorkChain):
         else:
             return True
         
-    def _inputs_from_mapping(self, input_mapping, input_values):
+    def _merge_nested_inputs(self, input_mapping, input_values, fixture_inputs):
         """list of mapping key and value"""
-        input_ret = {}
+        target_inputs = dict(fixture_inputs)
         
+        nested_key_inputs = {}
         for key, value in zip(input_mapping, input_values):
             # nest key separated by `.`
-            input_ret[key] = value
+            nested_key_inputs[key] = value
             
-        return {
-            'parameters': orm.Dict(dict=input_ret),    
-        }
+        inputs = _merge_nested_keys(nested_key_inputs, target_inputs)
+            
+        return inputs
             
         
     def launch_evaluation(self):
@@ -166,7 +173,11 @@ class GeneticAlgorithmWorkChain(WorkChain):
         # submit evaluation for the pop ind
         evals = {}
         for idx, ind in enumerate(self.ctx.population):
-            inputs = self._inputs_from_mapping(self.inputs.input_mapping.get_list(), list(ind))
+            inputs = self._merge_nested_inputs(
+                self.inputs.input_nested_keys.get_list(), 
+                list(ind), 
+                self.inputs.get('fixture_inputs', {})
+            )
             node = self.submit(evaluate_process, **inputs)
             evals[self.eval_key(idx)] = node
             self.indices_to_retrieve.append(idx)
@@ -207,13 +218,13 @@ class GeneticAlgorithmWorkChain(WorkChain):
         key = self.eval_key(idx)
         eval_proc = self.ctx[key]
         process_uuid = eval_proc.id
-        parameters = eval_proc.inputs.parameters.get_dict()
+        best_ind = self.ctx.population[idx]
         
         # TODO store more than one best solutions
         return {
             'best_fitness': best_fitness,
             'process_uuid': process_uuid,
-            'parameters': parameters,
+            'best_ind': best_ind,
         }
         
     def breed(self):
@@ -319,3 +330,71 @@ def _mutate(inds, mutate_probability, gene_space, gene_type, seed):
                 mut_inds[i, j] = inds[i, j]
                         
     return mut_inds
+
+def _merge_nested_keys(nested_key_inputs, target_inputs):
+    """
+    Maps nested_key_inputs onto target_inputs with support for nested keys:
+        x.y:a.b -> x.y['a']['b']
+    Note: keys will be python str; values will be AiiDA data types
+    """
+    def _get_nested_dict(in_dict, split_path):
+        res_dict = in_dict
+        for path_part in split_path:
+            res_dict = res_dict.setdefault(path_part, {})
+        return res_dict
+
+    destination = _copy_nested_dict(target_inputs)
+
+    for key, value in nested_key_inputs.items():
+        full_port_path, *full_attr_path = key.split(':')
+        *port_path, port_name = full_port_path.split('.')
+        namespace = _get_nested_dict(in_dict=destination, split_path=port_path)
+
+        if not full_attr_path:
+            if not isinstance(value, orm.Node):
+                value = to_aiida_type(value).store()
+            res_value = value
+        else:
+            if len(full_attr_path) != 1:
+                raise ValueError(f"Nested key syntax can contain at most one ':'. Got '{key}'")
+
+            # Get or create the top-level dictionary.
+            try:
+                res_dict = namespace[port_name].get_dict()
+            except KeyError:
+                res_dict = {}
+
+            *sub_dict_path, attr_name = full_attr_path[0].split('.')
+            sub_dict = _get_nested_dict(in_dict=res_dict, split_path=sub_dict_path)
+            sub_dict[attr_name] = _from_aiida_type(value)
+            res_value = orm.Dict(dict=res_dict).store()
+
+        namespace[port_name] = res_value
+    return destination
+
+
+def _copy_nested_dict(value):
+    """
+    Copy nested dictionaries. `AttributesFrozendict` is converted into
+    a (mutable) plain Python `dict`.
+
+    This is needed because `copy.deepcopy` would create new AiiDA nodes.
+    """
+    if isinstance(value, (dict, AttributesFrozendict)):
+        return {k: _copy_nested_dict(v) for k, v in value.items()}
+    return value
+
+
+def _from_aiida_type(value):
+    """
+    Convert an AiiDA data object to the equivalent Python object
+    """
+    if not isinstance(value, orm.Node):
+        return value
+    if isinstance(value, orm.BaseType):
+        return value.value
+    if isinstance(value, orm.Dict):
+        return value.get_dict()
+    if isinstance(value, orm.List):
+        return value.get_list()
+    raise TypeError(f'value of type {type(value)} is not supported')
