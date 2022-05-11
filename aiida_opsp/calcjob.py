@@ -36,6 +36,8 @@ class OncvPseudoCalculation(CalcJob):
             message='The pseudo wave function has node.')   # TODO can record which l is wrong and used to tune inputs of GA
         spec.exit_code(502, 'ERROR_LSCHVKBB',
             message='The lschvkbb error.')  
+        spec.exit_code(503, 'ERROR_ABIPY_NOT_PARSED',
+            message='Exception while parsing using abipy.')  
         
         
         spec.inputs['metadata']['options']['input_filename'].default = 'aiida.in'

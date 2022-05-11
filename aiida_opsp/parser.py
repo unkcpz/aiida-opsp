@@ -43,7 +43,14 @@ class OncvPseudoParser(Parser):
             fp.write(stdout.encode('utf-8'))
             fpath = fp.name
             abi_parser = OncvParser(fpath)
-            abi_parser.scan()
+            try:
+                abi_parser.scan()
+            except:
+                # not finish okay therefore not parsed
+                # TODO re-check the following exit states, will be override by this one
+                output_parameters = {}
+                self.out('output_parameters', orm.Dict(dict=output_parameters))
+                return self.exit_codes.get('ERROR_ABIPY_NOT_PARSED')
             
             crop_0_5_atan_logder_l1err = compute_crop_l1err(abi_parser.atan_logders, 0., 5)
             results = abi_parser.get_results()
@@ -136,7 +143,11 @@ def parse_configuration_test(test_idx, test_ctx):
             return out
         
         # parse line of angular momentum
-        n, l, f, eae, eps, diff = line.split()
+        try:
+            n, l, f, eae, eps, diff = line.split()
+        except ValueError:
+            # conduction states are not parsed and raise not enough values error
+            continue
         
         state_error.append(float(diff.replace('D', 'E')))
         
