@@ -5,10 +5,6 @@ from aiida import orm
 from aiida_opsp.workflows.ga import GeneticAlgorithmWorkChain
 from aiida_opsp.workflows.psp_oncv import OncvPseudoBaseWorkChain
 
-@calcfunction
-def oncv_output_mapping(res: orm.Dict) -> orm.Dict:
-    pass 
-
 def run():
     code = orm.load_code('oncv4@localhost0')
 
@@ -25,7 +21,7 @@ def run():
                 'rc': 1.1,
                 'ncon': 4,
                 'nbas': 8,
-                # 'qcut': 9.0,
+                'qcut': 9.0,
                 'nproj': 2,
                 'debl': 1.0,
             }, 
@@ -50,20 +46,21 @@ def run():
         'parameters': orm.Dict(dict={
             'num_generation': 2,
             'num_pop_per_generation': 20,
-            'num_genes': 3, # check shape compatible with gene_space
+            'num_genes': 2, # check shape compatible with gene_space
             'num_mating_parents': 15,
             'num_keep_parents': 2,
-            'num_mutation_genes': 2,    # not used
+            'num_mutation_genes': 2,    # not being used
             'mutate_probability': 0.4,
-            'gene_space': [{'low': 1.1, 'high': 2.0}, {'low': 8.0, 'high': 16.0}, {'low': 8.0, 'high': 10.0}],
-            'gene_type': ['float', 'float', 'float'],
+            'gene_space': [{'low': 1.1, 'high': 2.0}, {'low': 8.0, 'high': 16.0}],
+            'gene_type': ['float', 'float'],
             'seed': 979,
         }),
         'evaluate_process': OncvPseudoBaseWorkChain,
         'input_nested_keys': orm.List(list=[
-            'angular_momentum_settings:s.rc', 
-            'angular_momentum_settings:s.qcut', 
-            'angular_momentum_settings:p.qcut',]
+            'angular_momentum_settings:s.rc',
+            'angular_momentum_settings:s.qcut',
+            # 'angular_momentum_settings:p.qcut',
+        ]
         ),
         'result_key': orm.Str('result'),
         'fixture_inputs': {
