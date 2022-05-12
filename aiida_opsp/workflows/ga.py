@@ -51,6 +51,20 @@ def load_object(cls_name):
             return yaml.load(cls_name_str[len(_YAML_IDENTIFIER):])
         raise ValueError(f"Could not load class name '{cls_name_str}'.") from err
 
+#### The keys used for GA parameters
+# 'num_generation': 20,
+# 'num_pop_per_generation': 20,
+# 'num_genes': 2, # check shape compatible with gene_space
+# 'num_mating_parents': 15,
+# 'num_elitism': 2,
+# 'num_mutation_genes': 2,    # not being used
+# 'individual_mutate_probability': 1.0,
+# 'gene_mutate_probability': 0.2,
+# 'crossover_probability': 0.0,
+# 'gene_space': [{'low': 1.0, 'high': 2.0}, {'low': 4.0, 'high': 14.0}],
+# 'gene_type': ['float', 'float'],
+# 'seed': 979,
+
 class GeneticAlgorithmWorkChain(WorkChain):
     """WorkChain to run GA """
     
@@ -232,33 +246,49 @@ class GeneticAlgorithmWorkChain(WorkChain):
         self.ctx.current_generation += 1    # IMPORTANT, otherwise infinity loop
         self.ctx.seed += 1 # IMPORTANT the seed should update for every generation otherwise mutate offspring is the same
         
-        self.report(f'population: {self.ctx.population}')
+        self.report(f'population before breed: \n{self.ctx.population}')
         self.report(f'fitness: {self.ctx.fitness}')
         
         # keep and mating parents selection
-        keep_parents, mating_parents = _rank_selection(
+        elitism, mating_parents = _rank_selection(
             self.ctx.population, 
             self.ctx.fitness, 
-            self.ctx.const_parameters['num_keep_parents'],
+            self.ctx.const_parameters['num_elitism'],
             self.ctx.const_parameters['num_mating_parents'],
         )
         
+        # EXPERIMENTAL!!
+        # N_offspring = N_pop - 2 * N_elitism
+        # sinec mutate using gaussing for the other N_elitism
+        
         # crossover
-        num_offsprings = self.ctx.const_parameters['num_pop_per_generation'] - self.ctx.const_parameters['num_keep_parents']
+        num_offsprings = self.ctx.const_parameters['num_pop_per_generation'] - 2 * self.ctx.const_parameters['num_elitism']
         offspring = _crossover(mating_parents, num_offsprings, seed=self.ctx.seed)
         
-        # mutation
+        # mutation elitism
+        mut_elitism = _mutate(
+            elitism,
+            individual_mutate_probability=1.0, 
+            gene_mutate_probability=0.9, 
+            gene_space=self.ctx.const_parameters['gene_space'],
+            gene_type=self.ctx.const_parameters['gene_type'],
+            seed=self.ctx.seed,
+            gaussian=True,
+        )
+        
+        # mutation offspring
         mut_offspring = _mutate(
             offspring, 
-            mutate_probability=self.ctx.const_parameters['mutate_probability'], 
+            individual_mutate_probability=self.ctx.const_parameters['individual_mutate_probability'], 
+            gene_mutate_probability=self.ctx.const_parameters['gene_mutate_probability'], 
             gene_space=self.ctx.const_parameters['gene_space'],
             gene_type=self.ctx.const_parameters['gene_type'],
             seed=self.ctx.seed
         )
         
         # population generation: update ctx population for next generation
-        self.ctx.population = np.vstack((keep_parents, mut_offspring))
-        self.report(f'new population: {self.ctx.population}')
+        self.ctx.population = np.vstack((elitism, mut_elitism, mut_offspring))
+        # self.report(f'new population: {self.ctx.population}')
 
     
     def finalize(self):
@@ -267,7 +297,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
                 'current_generation': self.ctx.current_generation,
             }).store())
         
-def _rank_selection(population, fitness, num_keep_parents, num_mating_parents):
+def _rank_selection(population, fitness, num_elitism, num_mating_parents):
     """
     Selects the parents using the rank selection technique. Later, these parents will mate to produce the offspring.
     It accepts 2 parameters:
@@ -280,8 +310,8 @@ def _rank_selection(population, fitness, num_keep_parents, num_mating_parents):
     fitness_sorted.reverse()    # max fitness the best, reverse to put in front of list
     # Selecting the best individuals in the current generation as parents for producing the offspring of the next generation.
 
-    keep_parents = np.empty((num_keep_parents, population.shape[1]), dtype=object)
-    for i in range(num_keep_parents):
+    keep_parents = np.empty((num_elitism, population.shape[1]), dtype=object)
+    for i in range(num_elitism):
         # set i-th best ind to i row
         keep_parents[i, :] = population[fitness_sorted[i], :].copy()
         
@@ -293,6 +323,10 @@ def _rank_selection(population, fitness, num_keep_parents, num_mating_parents):
     return keep_parents, mating_parents
 
 def _crossover(parents, num_offsprings, seed):
+    """In principle the max number of un-duplicated offsprings this procedure can produce
+    is P(nparents, 2).
+    """
+    # TODO a warning for too much offspring required with too less parents.
     random.seed(f'crossover_{seed}')
     
     num_parents, num_genes = parents.shape
@@ -310,8 +344,16 @@ def _crossover(parents, num_offsprings, seed):
         
     return offspring
 
-def _mutate(inds, mutate_probability, gene_space, gene_type, seed):
+def _mutate(inds, individual_mutate_probability, gene_mutate_probability, gene_space, gene_type, seed, gaussian=False):
+    """docstring"""
     random.seed(f'mutate_{seed}')
+    
+    # whether mutate this indvidual.
+    # this is a suplement for keep parent,
+    # usually this set to 1 so every individual not ranking to 
+    # keep parents will mutate.
+    if random.random() > individual_mutate_probability:
+        return inds
     
     num_inds, num_genes = inds.shape    
     mut_inds = np.empty([num_inds, num_genes], dtype=float)
@@ -320,8 +362,12 @@ def _mutate(inds, mutate_probability, gene_space, gene_type, seed):
             space = gene_space[j]
             # based of probability, keep original value if not being hit
             # TODO: if not fully random but a pertubation may better??
-            if random.random() < mutate_probability:
-                value = random.uniform(space['low'], space['high'])
+            if random.random() < gene_mutate_probability:
+                if gaussian:
+                    old_value = inds[i, j]
+                    value = random.gauss(old_value, sigma=old_value/10)
+                else:
+                    value = random.uniform(space['low'], space['high'])
                 
                 if gene_type[j] == 'int':
                     value = round(value)

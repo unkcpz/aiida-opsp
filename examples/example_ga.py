@@ -44,14 +44,15 @@ def run():
     
     inputs = {
         'parameters': orm.Dict(dict={
-            'num_generation': 2,
+            'num_generation': 20,
             'num_pop_per_generation': 20,
             'num_genes': 2, # check shape compatible with gene_space
-            'num_mating_parents': 15,
-            'num_keep_parents': 2,
+            'num_mating_parents': 16,
+            'num_elitism': 2,
             'num_mutation_genes': 2,    # not being used
-            'mutate_probability': 0.4,
-            'gene_space': [{'low': 1.1, 'high': 2.0}, {'low': 8.0, 'high': 16.0}],
+            'individual_mutate_probability': 1.0,
+            'gene_mutate_probability': 0.2,
+            'gene_space': [{'low': 1.0, 'high': 2.0}, {'low': 4.0, 'high': 14.0}],
             'gene_type': ['float', 'float'],
             'seed': 979,
         }),

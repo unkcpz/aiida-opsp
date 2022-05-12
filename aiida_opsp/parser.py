@@ -45,6 +45,7 @@ class OncvPseudoParser(Parser):
             abi_parser = OncvParser(fpath)
             try:
                 abi_parser.scan()
+                crop_0_5_atan_logder_l1err = compute_crop_l1err(abi_parser.atan_logders, 0., 5)
             except:
                 # not finish okay therefore not parsed
                 # TODO re-check the following exit states, will be override by this one
@@ -52,7 +53,6 @@ class OncvPseudoParser(Parser):
                 self.out('output_parameters', orm.Dict(dict=output_parameters))
                 return self.exit_codes.get('ERROR_ABIPY_NOT_PARSED')
             
-            crop_0_5_atan_logder_l1err = compute_crop_l1err(abi_parser.atan_logders, 0., 5)
             results = abi_parser.get_results()
         
         output_parameters = {}

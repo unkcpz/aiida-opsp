@@ -57,12 +57,14 @@ class OncvPseudoBaseWorkChain(WorkChain):
         # a very experiment way to define evaluate value for accuracy of psp.
         g_factor = 1000 # the factor (weight) for ground state error, we what the ground state described accurate 
         d = workchain.outputs.output_parameters
-        self.report(d.get_dict())
-        result = (d['tc_0']['state_error_avg'] * g_factor + \
-                d['tc_1']['state_error_avg'] + \
-                d['tc_2']['state_error_avg']) / 3
+        # self.report(d.get_dict())
         
-        # GA need use max for best results error close to 0 is max
+        logder_err = d['crop_0_5_atan_logder_l1err']
+        max_ecut = d['max_ecut']
+        # ev = (d['tc_0']['state_error_avg'] * g_factor + d['tc_1']['state_error_avg'] + d['tc_2']['state_error_avg']) / 3
+        result = max_ecut * logder_err
+        
+        # GA need use max for best results error, the smaller the better so close to 0 is best
         result = -abs(result)
         
         self.out('result', orm.Float(result).store())
