@@ -203,6 +203,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
         """-> fitness parser, calc best solution"""
         self.report('Checking finished evaluations.')
         outputs = {}
+    
         while self.indices_to_retrieve:
             idx = self.indices_to_retrieve.pop(0)
             key = self.eval_key(idx)
@@ -222,6 +223,18 @@ class GeneticAlgorithmWorkChain(WorkChain):
             
         self.ctx.fitness = outputs
         self.ctx.best_solution = self._get_best_solution(outputs)
+        
+        output_report = []
+        for idx, ind in enumerate(self.ctx.population):
+            key = self.eval_key(idx)
+            proc = self.ctx[key]
+            fitness = outputs[idx]
+            output_report.append(f'idx={idx}  pk={proc.pk}: {ind} -> fitness={fitness}')
+            
+        output_report_str = '\n'.join(output_report)
+        
+        self.report(f'population and process pk:')
+        self.report(f'\n{output_report_str}')
         self.report(self.ctx.best_solution)
         
     def _get_best_solution(self, outputs):
@@ -245,9 +258,6 @@ class GeneticAlgorithmWorkChain(WorkChain):
         """breed new generation"""
         self.ctx.current_generation += 1    # IMPORTANT, otherwise infinity loop
         self.ctx.seed += 1 # IMPORTANT the seed should update for every generation otherwise mutate offspring is the same
-        
-        self.report(f'population before breed: \n{self.ctx.population}')
-        self.report(f'fitness: {self.ctx.fitness}')
         
         # keep and mating parents selection
         elitism, mating_parents = _rank_selection(

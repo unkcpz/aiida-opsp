@@ -12,14 +12,16 @@ def run():
     angular_momentum_settings = orm.Dict(
         dict={
             's': {
-                'rc': 1.4,
-                'qcut': 8.6,
+                # 'rc': 1.4,
+                # 'qcut': 8.6,
                 'ncon': 4,
                 'nbas': 8,
                 'nproj': 2,
                 'debl': 1.0,
             },
             'p': {
+                # 'rc': 1.4,
+                # 'qcut': 8.6,
                 'ncon': 4,
                 'nbas': 8,
                 'nproj': 2,
@@ -31,8 +33,8 @@ def run():
         dict={
             'llcol': 4, # fix
             'lpopt': 5, # 1-5, algorithm enum set
-            'rc(5)': 1.1,
-            'dvloc0': 0.0,
+            # 'rc(5)': 1.1,
+            # 'dvloc0': 0.0,
         }
     )
     nlcc_settings = orm.Dict(
@@ -46,21 +48,38 @@ def run():
         'parameters': orm.Dict(dict={
             'num_generation': 20,
             'num_pop_per_generation': 20,
-            'num_genes': 2, # check shape compatible with gene_space
+            'num_genes': 6, # check shape compatible with gene_space
             'num_mating_parents': 16,
             'num_elitism': 2,
-            'num_mutation_genes': 2,    # not being used
+            'num_mutation_genes': 6,    # not being used
             'individual_mutate_probability': 1.0,
             'gene_mutate_probability': 0.2,
-            'gene_space': [{'low': 0.5, 'high': 1.5}, {'low': 4.0, 'high': 14.0}],
-            'gene_type': ['float', 'float'],
+            'gene_space': [
+                {'low': 0.5, 'high': 1.5}, 
+                {'low': 4.0, 'high': 14.0}, 
+                {'low': 0.5, 'high': 1.5}, 
+                {'low': 4.0, 'high': 14.0},
+                {'low': 0.5, 'high': 1.5}, 
+                {'low': 0.0, 'high': 0.2},
+            ],
+            'gene_type': [
+                'float', 
+                'float',
+                'float', 
+                'float',
+                'float', 
+                'float',
+            ],
             'seed': 979,
         }),
         'evaluate_process': OncvPseudoBaseWorkChain,
         'input_nested_keys': orm.List(list=[
+            'angular_momentum_settings:s.rc',
+            'angular_momentum_settings:s.qcut',
             'angular_momentum_settings:p.rc',
             'angular_momentum_settings:p.qcut',
-            # 'angular_momentum_settings:p.qcut',
+            'local_potential_settings:rc(5)',
+            'local_potential_settings:dvloc0',
         ]
         ),
         'result_key': orm.Str('result'),
