@@ -348,7 +348,8 @@ def _crossover(parents, num_offsprings, seed):
         
         #mating
         # TODO: two points crossover if more gene
-        k = 1   # TODO -> range(1:num_genes)
+        # k = 0 for random one of parents. e.g for crossover probability=0.0 no crossover
+        k = 0   # TODO -> range(1:num_genes)
         child = np.hstack((mother[:k], father[k:]))
         offspring[i, :] = child
         

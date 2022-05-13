@@ -113,6 +113,7 @@ class OncvPseudoCalculation(CalcJob):
         
         inp.append("# l, rc, ep, ncon, nbas, qcut  (lmax+1 lines, l's must be in order)")
         rcmax = 0.0
+        rcmin = 99.0
         for k in ['s', 'p', 'd']:
             l = o2l(k) 
             v = angular_momentum_settings.get(k, None)
@@ -120,6 +121,7 @@ class OncvPseudoCalculation(CalcJob):
             if v:
                 rc = v.get('rc')
                 rcmax = max(rcmax, rc)
+                rcmin = min(rcmin, rc)
                 ncon = v.get('ncon')
                 nbas = v.get('nbas')
                 qcut = v.get('qcut')
@@ -131,7 +133,10 @@ class OncvPseudoCalculation(CalcJob):
         inp.append('# LOCAL POTENTIAL')
         llcol = local_potential_settings.get('llcol')
         lpopt = local_potential_settings.get('lpopt')
-        rc_5 = local_potential_settings.get('rc(5)')
+        
+        # if rc(5) not set use default min rc
+        rc_5 = local_potential_settings.get('rc(5)', rcmin)
+        
         dvloc0 = local_potential_settings.get('dvloc0')
         lst = [llcol, lpopt, rc_5, dvloc0]
         inp.append(' '.join(str(e) for e in lst))
