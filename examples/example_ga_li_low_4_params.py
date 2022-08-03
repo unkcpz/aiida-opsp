@@ -6,7 +6,7 @@ from aiida_opsp.workflows.ga import GeneticAlgorithmWorkChain
 from aiida_opsp.workflows.psp_oncv import OncvPseudoBaseWorkChain
 
 def run():
-    code = orm.load_code('oncv4@localhost0')
+    code = orm.load_code('oncv4@localhost1')
 
     conf_name = orm.Str('Li-low')
     angular_momentum_settings = orm.Dict(
@@ -33,8 +33,8 @@ def run():
         dict={
             'llcol': 4, # fix
             'lpopt': 5, # 1-5, algorithm enum set
-            # 'rc(5)': 1.1,
-            # 'dvloc0': 0.0,
+            'rc(5)': 1.1,
+            'dvloc0': 0.0,
         }
     )
     nlcc_settings = orm.Dict(
@@ -47,29 +47,29 @@ def run():
     
     inputs = {
         'parameters': orm.Dict(dict={
-            'num_generation': 2,
+            'num_generation': 20,
             'num_pop_per_generation': 20,
-            'num_genes': 6, # check shape compatible with gene_space
+            'num_genes': 4, # check shape compatible with gene_space
             'num_mating_parents': 16,
             'num_elitism': 2,
             'num_mutation_genes': 6,    # not being used
             'individual_mutate_probability': 1.0,
             'gene_mutate_probability': 0.2,
             'gene_space': [
-                {'low': 1.0, 'high': 3.0}, 
-                {'low': 4.0, 'high': 10.0}, 
-                {'low': 1.0, 'high': 3.0}, 
-                {'low': 4.0, 'high': 10.0},
-                {'low': 1.0, 'high': 3.0}, 
-                {'low': 0.0, 'high': 0.2},
+                {'low': 1.0, 'high': 3.0}, # s, rc
+                {'low': 4.0, 'high': 10.0}, # s, qcut
+                {'low': 1.0, 'high': 3.0}, # p, rc
+                {'low': 4.0, 'high': 10.0}, # p, qcut
+                # {'low': 1.0, 'high': 3.0}, 
+                # {'low': 0.0, 'high': 0.2},
             ],
             'gene_type': [
                 'float', 
                 'float',
                 'float', 
                 'float',
-                'float', 
-                'float',
+                # 'float', 
+                # 'float',
             ],
             'seed': 979,
         }),
@@ -79,8 +79,8 @@ def run():
             'angular_momentum_settings:s.qcut',
             'angular_momentum_settings:p.rc',
             'angular_momentum_settings:p.qcut',
-            'local_potential_settings:rc(5)',
-            'local_potential_settings:dvloc0',
+            # 'local_potential_settings:rc(5)',
+            # 'local_potential_settings:dvloc0',
         ]
         ),
         'result_key': orm.Str('result'),

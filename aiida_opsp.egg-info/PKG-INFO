@@ -5,7 +5,6 @@ Summary: The AiiDA plugin for optimize psp EA search
 Author: Jusong Yu
 Author-email: jusong.yu@epfl.ch
 License: MIT
-Platform: UNKNOWN
 Classifier: Framework :: AiiDA
 Classifier: License :: OSI Approved :: MIT License
 Classifier: Programming Language :: Python
@@ -19,5 +18,3 @@ Provides-Extra: tests
 License-File: LICENSE
 
 # aiida-opsp
-
-

@@ -13,3 +13,16 @@ aiida_opsp.egg-info/dependency_links.txt
 aiida_opsp.egg-info/entry_points.txt
 aiida_opsp.egg-info/requires.txt
 aiida_opsp.egg-info/top_level.txt
+aiida_opsp/statics/__init__.py
+aiida_opsp/statics/configurations/Ga-d.dat
+aiida_opsp/statics/configurations/Li-low.dat
+aiida_opsp/statics/configurations/Li-s.dat
+aiida_opsp/statics/configurations/__init__.py
+aiida_opsp/statics/test_configurations/Ga-d.dat
+aiida_opsp/statics/test_configurations/Li-low.dat
+aiida_opsp/statics/test_configurations/Li-s.dat
+aiida_opsp/statics/test_configurations/__init__.py
+aiida_opsp/workflows/__init__.py
+aiida_opsp/workflows/ga.py
+aiida_opsp/workflows/ls.py
+aiida_opsp/workflows/psp_oncv.py

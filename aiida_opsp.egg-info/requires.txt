@@ -1,4 +1,6 @@
-importlib_resources~=5.4
+aiida-core[atomic_tools]~=2.0.2
+aiida-optimize~=1.0
+aiida-pseudo~=0.7.0
 numpy~=1.22
 
 [dev]
