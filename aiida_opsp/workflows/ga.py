@@ -86,7 +86,8 @@ class GeneticAlgorithmWorkChain(WorkChain):
             while_(cls.not_finished)(
                 cls.launch_evaluation,    # calc fitness of current generation
                 cls.get_results,
-                cls.breed,    # breed new generation (parents, crossover, mutation, new_generation_breed)
+                cls.crossover,
+                cls.mutate,    # breed new generation (parents, crossover, mutation, new_generation_breed)
             ),
             cls.finalize,   # stop iteration and get results
         )
@@ -241,7 +242,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
         import operator
         
         # get the max value and idx of fitness
-        idx, best_fitness =  max(outputs.items(), key=operator.itemgetter(1))
+        idx, best_fitness =  min(outputs.items(), key=operator.itemgetter(1))
         key = self.eval_key(idx)
         eval_proc = self.ctx[key]
         process_uuid = eval_proc.id
@@ -254,13 +255,13 @@ class GeneticAlgorithmWorkChain(WorkChain):
             'best_ind': best_ind,
         }
         
-    def breed(self):
-        """breed new generation"""
+    def crossover(self):
+        """crossover"""
         self.ctx.current_generation += 1    # IMPORTANT, otherwise infinity loop
         self.ctx.seed += 1 # IMPORTANT the seed should update for every generation otherwise mutate offspring is the same
         
         # keep and mating parents selection
-        elitism, mating_parents = _rank_selection(
+        self.ctx.elitism, mating_parents = _rank_selection(
             self.ctx.population, 
             self.ctx.fitness, 
             self.ctx.const_parameters['num_elitism'],
@@ -273,12 +274,16 @@ class GeneticAlgorithmWorkChain(WorkChain):
         
         # crossover
         num_offsprings = self.ctx.const_parameters['num_pop_per_generation'] - 2 * self.ctx.const_parameters['num_elitism']
-        offspring = _crossover(mating_parents, num_offsprings, seed=self.ctx.seed)
+        self.ctx.offspring = _crossover(mating_parents, num_offsprings, seed=self.ctx.seed)
+        
+        
+    def mutate(self):
+        """breed new generation"""
         
         # mutation elitism
         mut_elitism = _mutate(
-            elitism,
-            individual_mutate_probability=1.0, 
+            self.ctx.elitism,
+            individual_mutate_probability=1.0,
             gene_mutate_probability=0.9, 
             gene_space=self.ctx.const_parameters['gene_space'],
             gene_type=self.ctx.const_parameters['gene_type'],
@@ -288,7 +293,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
         
         # mutation offspring
         mut_offspring = _mutate(
-            offspring, 
+            self.ctx.offspring, 
             individual_mutate_probability=self.ctx.const_parameters['individual_mutate_probability'], 
             gene_mutate_probability=self.ctx.const_parameters['gene_mutate_probability'], 
             gene_space=self.ctx.const_parameters['gene_space'],
@@ -297,9 +302,8 @@ class GeneticAlgorithmWorkChain(WorkChain):
         )
         
         # population generation: update ctx population for next generation
-        self.ctx.population = np.vstack((elitism, mut_elitism, mut_offspring))
+        self.ctx.population = np.vstack((self.ctx.elitism, mut_elitism, mut_offspring))
         # self.report(f'new population: {self.ctx.population}')
-
     
     def finalize(self):
         self.report('on stop')
