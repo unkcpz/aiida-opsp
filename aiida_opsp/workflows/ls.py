@@ -43,6 +43,17 @@ class Rosenbrock(WorkChain):
     def run(self):
         x, y = self.inputs.x.value, self.inputs.y.value
         self.out('result', orm.Float((1 - x) ** 2 + 100 * (y - x**2) ** 2).store())
+        
+def create_init_simplex(xs, tol=0.2):
+    ret = [xs]
+    for i in range(len(xs)):
+        #
+        np.random.seed(1992+i)
+        xss = list(np.array(xs) + np.random.uniform(low=-tol, high=tol, size=len(xs)))
+        
+        ret.append(xss)
+        
+    return ret
 
 @singledispatch
 def get_fullname(cls_obj):

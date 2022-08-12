@@ -14,6 +14,8 @@ from plumpy.utils import AttributesFrozendict
 
 from aiida.orm.nodes.data.base import to_aiida_type
 
+from aiida_opsp.workflows.ls import LocalSearchWorkChain, create_init_simplex
+
 
 # Generic process evaluation the code is ref from aiida-optimize
 _YAML_IDENTIFIER = '!!YAML!!'
@@ -87,7 +89,9 @@ class GeneticAlgorithmWorkChain(WorkChain):
                 cls.launch_evaluation,    # calc fitness of current generation
                 cls.get_results,
                 cls.crossover,
-                cls.mutate,    # breed new generation (parents, crossover, mutation, new_generation_breed)
+                cls.mutate,
+                cls.local_search,
+                cls.combine_pop,
             ),
             cls.finalize,   # stop iteration and get results
         )
@@ -281,7 +285,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
         """breed new generation"""
         
         # mutation elitism
-        mut_elitism = _mutate(
+        self.ctx.mut_elitism = _mutate(
             self.ctx.elitism,
             individual_mutate_probability=1.0,
             gene_mutate_probability=0.9, 
@@ -292,7 +296,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
         )
         
         # mutation offspring
-        mut_offspring = _mutate(
+        self.ctx.mut_offspring = _mutate(
             self.ctx.offspring, 
             individual_mutate_probability=self.ctx.const_parameters['individual_mutate_probability'], 
             gene_mutate_probability=self.ctx.const_parameters['gene_mutate_probability'], 
@@ -302,8 +306,35 @@ class GeneticAlgorithmWorkChain(WorkChain):
         )
         
         # population generation: update ctx population for next generation
-        self.ctx.population = np.vstack((self.ctx.elitism, mut_elitism, mut_offspring))
+        # self.ctx.population = np.vstack((self.ctx.elitism, mut_elitism, mut_offspring))
         # self.report(f'new population: {self.ctx.population}')
+        
+    def local_search(self):
+        # local_search of elitism
+        inputs = {
+            'parameters': orm.Dict(dict={
+                'max_iter': 20,
+                'xtol': 1e-1,
+                'ftol': 1e-1,
+                # 'init_simplex': create_init_simplex([1.5831, 5.5998, 2.2045, 9.5575], tol=0.1)  # fitness=183.25
+                'init_simplex': create_init_simplex([2.8342, 4.4971, 2.5851, 8.5906], tol=0.1)  # fitness=16.13
+                # 'init_simplex': [   # fitness=16.13
+                #     [2.8342, 4.4971, 2.5851, 8.5906], 
+                #     [2.9342, 4.3971, 2.6851, 9.5906], 
+                #     [2.7342, 4.7971, 2.2851, 8.7906], 
+                # ],
+            }),
+            'evaluate_process': self.inputs.evaluate_process,
+            'input_nested_keys': self.inputs.input_nested_keys,
+            'result_key': self.inputs.result_key,
+            'fixture_inputs': self.inputs.fixture_inputs,
+        }
+        running_elitism = self.submit(LocalSearchWorkChain, **inputs)
+        self.to_context(elitism_workchain=running_elitism)
+    
+    def combine_pop(self):
+        # TODO check the local_search workchains are finished.
+        self.ctx.population = np.vstack((self.ctx.local_min_elitism, self.ctx.local_min_mut_elitism, self.ctx.local_min_mut_offspring))
     
     def finalize(self):
         self.report('on stop')

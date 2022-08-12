@@ -3,19 +3,8 @@ from aiida.engine import calcfunction
 from aiida import orm
 import numpy as np
 
-from aiida_opsp.workflows.ls import LocalSearchWorkChain, Rosenbrock
+from aiida_opsp.workflows.ls import LocalSearchWorkChain, Rosenbrock, create_init_simplex
 from aiida_opsp.workflows.psp_oncv import OncvPseudoBaseWorkChain
-
-def create_init_simplex(xs, tol=0.2):
-    ret = [xs]
-    for i in range(len(xs)):
-        #
-        np.random.seed(1992+i)
-        xss = list(np.array(xs) + np.random.uniform(low=-tol, high=tol, size=len(xs)))
-        
-        ret.append(xss)
-        
-    return ret
 
 def run():
     code = orm.load_code('oncv4@localhost1')
