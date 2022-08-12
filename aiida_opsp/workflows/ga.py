@@ -215,7 +215,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
                 # - the evalute process failed for resoure reason, should raise and reported.
                 # - TODO: Test configuration 0 is get but no other configuration results -> check what output look like
                 if eval_proc.exit_status == 201: # ERROR_PSPOT_HAS_NODE
-                    outputs[idx] = -math.inf
+                    outputs[idx] = math.inf
                 else:
                     return self.exit_codes.ERROR_EVALUATE_PROCESS_FAILED
             else:
@@ -317,7 +317,6 @@ def _rank_selection(population, fitness, num_elitism, num_mating_parents):
     """
 
     fitness_sorted = sorted(range(len(fitness)), key=lambda k: fitness[k])
-    fitness_sorted.reverse()    # max fitness the best, reverse to put in front of list
     # Selecting the best individuals in the current generation as parents for producing the offspring of the next generation.
 
     keep_parents = np.empty((num_elitism, population.shape[1]), dtype=object)

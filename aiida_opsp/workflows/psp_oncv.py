@@ -62,10 +62,12 @@ class OncvPseudoBaseWorkChain(WorkChain):
         logder_err = d['crop_0_5_atan_logder_l1err']
         max_ecut = d['max_ecut']
         # ev = (d['tc_0']['state_error_avg'] * g_factor + d['tc_1']['state_error_avg'] + d['tc_2']['state_error_avg']) / 3
+        self.report(f'I have max ectu = {max_ecut}, and logerr_err = {logder_err}. TELL ME HOW TO PUT WEIGHT FOR THEM.')
+        
         result = max_ecut * logder_err
         
-        # GA need use max for best results error, the smaller the better so close to 0 is best
-        result = -abs(result)
+        # Search function need use min for best results error, the smaller the better so close to 0 is best
+        result = abs(result)
         
         self.out('result', orm.Float(result).store())
         

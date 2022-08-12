@@ -26,6 +26,24 @@ CHI = 2
 PSI = 0.5
 SIGMA = 0.5
 
+class Rosenbrock(WorkChain):
+    
+    @classmethod
+    def define(cls, spec):
+        super(Rosenbrock, cls).define(spec)
+        
+        spec.input('x')
+        spec.input('y')
+        spec.output('result')
+        
+        spec.outline(
+            cls.run,
+        )
+        
+    def run(self):
+        x, y = self.inputs.x.value, self.inputs.y.value
+        self.out('result', orm.Float((1 - x) ** 2 + 100 * (y - x**2) ** 2).store())
+
 @singledispatch
 def get_fullname(cls_obj):
     """
@@ -182,7 +200,8 @@ class LocalSearchWorkChain(WorkChain):
                 else:
                     return self.exit_codes.ERROR_EVALUATE_PROCESS_FAILED
             else:
-                outputs[idx] = - eval_proc.outputs['result'].value
+                # !!! IMPORTANT, the small panalty function the better.
+                outputs[idx] = eval_proc.outputs['result'].value
             
         fun_simplex = np.array([outputs[i] for i in range(len(self.ctx._to_evaluate_simplex))])
         

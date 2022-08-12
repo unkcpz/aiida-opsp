@@ -1,9 +1,21 @@
 from aiida.engine import run_get_pk
 from aiida.engine import calcfunction
 from aiida import orm
+import numpy as np
 
-from aiida_opsp.workflows.ls import LocalSearchWorkChain
+from aiida_opsp.workflows.ls import LocalSearchWorkChain, Rosenbrock
 from aiida_opsp.workflows.psp_oncv import OncvPseudoBaseWorkChain
+
+def create_init_simplex(xs, tol=0.2):
+    ret = [xs]
+    for i in range(len(xs)):
+        #
+        np.random.seed(1992+i)
+        xss = list(np.array(xs) + np.random.uniform(low=-tol, high=tol, size=len(xs)))
+        
+        ret.append(xss)
+        
+    return ret
 
 def run():
     code = orm.load_code('oncv4@localhost1')
@@ -20,8 +32,8 @@ def run():
                 'debl': 2.0,
             },
             'p': {
-                'rc': 2.2,
-                'qcut': 7.0,
+                # 'rc': 2.2,
+                # 'qcut': 7.0,
                 'ncon': 3,
                 'nbas': 7,
                 'nproj': 2,
@@ -33,8 +45,8 @@ def run():
         dict={
             'llcol': 4, # fix
             'lpopt': 5, # 1-5, algorithm enum set
-            'rc(5)': 2.2,
-            'dvloc0': 2.0,
+            'rc(5)': 1.1,
+            'dvloc0': 0.0,
         }
     )
     nlcc_settings = orm.Dict(
@@ -47,21 +59,23 @@ def run():
     
     inputs = {
         'parameters': orm.Dict(dict={
-            'max_iter': 100,
-            'xtol': 1e-2,
-            'ftol': 1e-4,
-            'init_simplex': [
-                [2.21, 8.6], 
-                [2.5, 10.6], 
-                [2.6, 15.0], 
-            ],
+            'max_iter': 20,
+            'xtol': 1e-1,
+            'ftol': 1e-1,
+            # 'init_simplex': create_init_simplex([1.5831, 5.5998, 2.2045, 9.5575], tol=0.1)  # fitness=183.25
+            'init_simplex': create_init_simplex([2.8342, 4.4971, 2.5851, 8.5906], tol=0.1)  # fitness=16.13
+            # 'init_simplex': [   # fitness=16.13
+            #     [2.8342, 4.4971, 2.5851, 8.5906], 
+            #     [2.9342, 4.3971, 2.6851, 9.5906], 
+            #     [2.7342, 4.7971, 2.2851, 8.7906], 
+            # ],
         }),
         'evaluate_process': OncvPseudoBaseWorkChain,
         'input_nested_keys': orm.List(list=[
             'angular_momentum_settings:s.rc',
             'angular_momentum_settings:s.qcut',
-            # 'angular_momentum_settings:p.rc',
-            # 'angular_momentum_settings:p.qcut',
+            'angular_momentum_settings:p.rc',
+            'angular_momentum_settings:p.qcut',
         ]
         ),
         'result_key': orm.Str('result'),
@@ -80,6 +94,29 @@ def run():
 
     return res, pk
 
+# def run_test():
+#     inputs = {
+#         'parameters': orm.Dict(dict={
+#             'max_iter': 10,
+#             'xtol': 1e-1,
+#             'ftol': 1e-1,
+#             'init_simplex': [[1.2, 0.9], [1.0, 2.0], [2.0, 1.0]],
+#         }),
+#         'evaluate_process': Rosenbrock,
+#         'input_nested_keys': orm.List(list=[
+#             'x',
+#             'y',
+#         ]
+#         ),
+#         'result_key': orm.Str('result'),
+#         'fixture_inputs': {},
+#     }
+#     res, pk = run_get_pk(LocalSearchWorkChain, **inputs)
+
+#     return res, pk
+    
+
 if __name__ == '__main__':
     res, pk = run()
+    # res, pk = run_test()
     # print(res['result'].get_dict(), pk)
