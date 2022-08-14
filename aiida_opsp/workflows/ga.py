@@ -5,7 +5,7 @@ import yaml
 
 import aiida
 from aiida import orm
-from aiida.engine import WorkChain, while_
+from aiida.engine import WorkChain, while_, append_
 from aiida.engine.persistence import ObjectLoader
 from functools import singledispatch
 import math
@@ -311,34 +311,51 @@ class GeneticAlgorithmWorkChain(WorkChain):
         
     def local_search(self):
         # local_search of elitism
-        inputs = {
-            'parameters': orm.Dict(dict={
-                'max_iter': 20,
-                'xtol': 1e-1,
-                'ftol': 1e-1,
-                # 'init_simplex': create_init_simplex([1.5831, 5.5998, 2.2045, 9.5575], tol=0.1)  # fitness=183.25
-                'init_simplex': create_init_simplex([2.8342, 4.4971, 2.5851, 8.5906], tol=0.1)  # fitness=16.13
-                # 'init_simplex': [   # fitness=16.13
-                #     [2.8342, 4.4971, 2.5851, 8.5906], 
-                #     [2.9342, 4.3971, 2.6851, 9.5906], 
-                #     [2.7342, 4.7971, 2.2851, 8.7906], 
-                # ],
-            }),
-            'evaluate_process': self.inputs.evaluate_process,
-            'input_nested_keys': self.inputs.input_nested_keys,
-            'result_key': self.inputs.result_key,
-            'fixture_inputs': self.inputs.fixture_inputs,
-        }
-        running_elitism = self.submit(LocalSearchWorkChain, **inputs)
-        self.to_context(elitism_workchain=running_elitism)
+        for ind in self.ctx.elitism:
+            inputs = {
+                'parameters': orm.Dict(dict={
+                    'max_iter': 2,
+                    'xtol': 1e-1,
+                    'ftol': 1e-1,
+                    'init_simplex': create_init_simplex(ind, tol=0.1)  # fitness=16.13
+                }),
+                'evaluate_process': self.inputs.evaluate_process,
+                'input_nested_keys': self.inputs.input_nested_keys,
+                'result_key': self.inputs.result_key,
+                'fixture_inputs': self.inputs.fixture_inputs,
+            }
+            running = self.submit(LocalSearchWorkChain, **inputs)
+            self.to_context(workchain_elitism=append_(running))
     
     def combine_pop(self):
+        local_min_elitism_lst = []
+        local_min_elitism_y_list = []
+        for child in self.ctx.workchain_elitism:
+            if not child.is_finished_ok:
+                self.logger.warning(
+                    f"Local search not finished ok",
+                )
+                return self.exit_codes.ERROR_LOCAL_SEARCH_NOT_FINISHED_OK
+            
+            local_min_elitism_lst.append(child.outputs.result['xs'])
+            local_min_elitism_y_list.append(child.outputs.result['y'])
+            
+        self.ctx.local_min_elitism = np.array(local_min_elitism_lst)
+        self.ctx.local_min_elitism_y = local_min_elitism_y_list
+            
         # TODO check the local_search workchains are finished.
-        self.ctx.population = np.vstack((self.ctx.local_min_elitism, self.ctx.local_min_mut_elitism, self.ctx.local_min_mut_offspring))
+        # self.ctx.population = np.vstack((self.ctx.local_min_elitism, self.ctx.local_min_mut_elitism, self.ctx.local_min_mut_offspring))
+        self.ctx.population = np.vstack((self.ctx.local_min_elitism, self.ctx.mut_elitism, self.ctx.mut_offspring))
     
     def finalize(self):
+        # this step will come after `combine_pop`,
+        # the populations will correspond with the solutions.
+        # will store all population in a 2D list and fitness.
+        # will give the best one (the first one with idx = 0) and its fitness.
         self.report('on stop')
         self.out('result', orm.Dict(dict={
+                "populations": list(self.ctx.local_min_elitism), 
+                "fitness": self.ctx.local_min_elitism_y,
                 'current_generation': self.ctx.current_generation,
             }).store())
         

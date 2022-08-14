@@ -47,12 +47,11 @@ def run():
     
     inputs = {
         'parameters': orm.Dict(dict={
-            'num_generation': 20,
-            'num_pop_per_generation': 20,
+            'num_generation': 2,
+            'num_pop_per_generation': 10,
             'num_genes': 4, # check shape compatible with gene_space
-            'num_mating_parents': 16,
+            'num_mating_parents': 6,
             'num_elitism': 2,
-            'num_mutation_genes': 6,    # not being used
             'individual_mutate_probability': 1.0,
             'gene_mutate_probability': 0.2,
             'gene_space': [

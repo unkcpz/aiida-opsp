@@ -48,7 +48,7 @@ def run():
     
     inputs = {
         'parameters': orm.Dict(dict={
-            'max_iter': 20,
+            'max_iter': 2,
             'xtol': 1e-1,
             'ftol': 1e-1,
             # 'init_simplex': create_init_simplex([1.5831, 5.5998, 2.2045, 9.5575], tol=0.1)  # fitness=183.25

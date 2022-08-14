@@ -266,7 +266,7 @@ class LocalSearchWorkChain(WorkChain):
                 self.ctx.next_operation = "CONTINUE"    # no furture operation, continue as start from iter
                 self.ctx.finished = True
                 
-        self.ctx.num_iter += 1
+            self.ctx.num_iter += 1
         
     @property
     def xbar(self):
@@ -410,6 +410,8 @@ class LocalSearchWorkChain(WorkChain):
         self.report(f'on stop: simplex is {self.ctx.simplex}, fun_simplex is {self.ctx.fun_simplex}')
         self.out('result', orm.Dict(dict={
                 'num_iter': self.ctx.num_iter,
+                'xs': list(self.ctx.simplex[0, :]),
+                'y': float(self.ctx.fun_simplex[0]),
             }).store())
 
 def _merge_nested_keys(nested_key_inputs, target_inputs):
