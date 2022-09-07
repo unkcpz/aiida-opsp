@@ -130,6 +130,7 @@ class LocalSearchWorkChain(WorkChain):
                 ),
             ),
             cls.finalize,   # stop iteration and get results
+            cls.finalize_inspect,
         )
         spec.output('result', valid_type=orm.Dict)
         
@@ -405,8 +406,22 @@ class LocalSearchWorkChain(WorkChain):
         inputs = _merge_nested_keys(nested_key_inputs, target_inputs)
             
         return inputs
-
+    
     def finalize(self):
+        # sort
+        # do sort
+        idx = np.argsort(self.ctx.fun_simplex)
+        self.ctx.fun_simplex = np.take(self.ctx.fun_simplex, idx, axis=0)
+        self.ctx.simplex = np.take(self.ctx.simplex, idx, axis=0)
+        
+        self.report(f"best simplex is {self.ctx.simplex[0]}")
+        self.report(f"best fun_simplex is {self.ctx.fun_simplex[0]}")
+        
+        self.ctx._to_evaluate_simplex = [self.ctx.simplex[0]]
+        self._submit(name="finalize")
+        
+
+    def finalize_inspect(self):
         self.report(f'on stop: simplex is {self.ctx.simplex}, fun_simplex is {self.ctx.fun_simplex}')
         self.out('result', orm.Dict(dict={
                 'num_iter': self.ctx.num_iter,

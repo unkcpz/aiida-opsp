@@ -33,8 +33,8 @@ def run():
         dict={
             'llcol': 4, # fix
             'lpopt': 5, # 1-5, algorithm enum set
-            'rc(5)': 1.1,
-            'dvloc0': 0.0,
+            'rc(5)': 2.2,
+            'dvloc0': 2.0,
         }
     )
     nlcc_settings = orm.Dict(
@@ -53,11 +53,11 @@ def run():
             'num_mating_parents': 6,
             'num_elitism': 2,
             'individual_mutate_probability': 1.0,
-            'gene_mutate_probability': 0.2,
+            'gene_mutate_probability': 0.4,
             'gene_space': [
-                {'low': 1.0, 'high': 3.0}, # s, rc
+                {'low': 2.2, 'high': 3.0}, # s, rc
                 {'low': 4.0, 'high': 10.0}, # s, qcut
-                {'low': 1.0, 'high': 3.0}, # p, rc
+                {'low': 2.2, 'high': 3.0}, # p, rc
                 {'low': 4.0, 'high': 10.0}, # p, qcut
                 # {'low': 1.0, 'high': 3.0}, 
                 # {'low': 0.0, 'high': 0.2},

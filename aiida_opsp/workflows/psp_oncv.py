@@ -3,6 +3,41 @@ from aiida import orm
 from aiida.engine import ToContext
 from aiida_opsp.calcjob import OncvPseudoCalculation
 
+def penalty(crop_ldd=None, max_ecut=None, state_err_avg=None):
+    if crop_ldd is None:
+        return abs(9999)
+
+    # set range for crop intg (-inf, -5) (-5, -2) (-2, 0) (0, 2) (2, 5) (5, inf)
+    crop_weight_dict = {
+        "ninf_n5": 0, 
+        "n5_n2": 1, 
+        "n2_0": 1, 
+        "0_2": 5, 
+        "2_5": 5, 
+        "5_inf": 5,
+    }
+    
+    state_type_weight_dict = {
+        "bound": 1,
+        "unbound": 0.1,
+    }
+    
+    res_cost = 0.
+    for ldd in crop_ldd:
+        integ = ldd["integ"]
+        st_w = state_type_weight_dict.get(ldd["state_type"])
+        cw_w = crop_weight_dict.get(ldd["crop_range"])
+        res_cost += integ * st_w * cw_w
+    
+    # an example of penalty function TBD
+
+    # TODO: state_err_avg
+    
+    res_cost += max_ecut * 0.5
+    
+    # Search function need use min for best results error, the smaller the better so close to 0 is best
+    return res_cost
+    
 
 class OncvPseudoBaseWorkChain(WorkChain):
     """Wrap of OncvPseudoCalculation calcjob
@@ -55,19 +90,15 @@ class OncvPseudoBaseWorkChain(WorkChain):
         )
         
         # a very experiment way to define evaluate value for accuracy of psp.
-        g_factor = 1000 # the factor (weight) for ground state error, we what the ground state described accurate 
-        d = workchain.outputs.output_parameters
-        # self.report(d.get_dict())
+        d = dict(workchain.outputs.output_parameters)
         
-        logder_err = d['crop_0_5_atan_logder_l1err']
-        max_ecut = d['max_ecut']
-        # ev = (d['tc_0']['state_error_avg'] * g_factor + d['tc_1']['state_error_avg'] + d['tc_2']['state_error_avg']) / 3
-        self.report(f'I have max ectu = {max_ecut}, and logerr_err = {logder_err}. TELL ME HOW TO PUT WEIGHT FOR THEM.')
+        inputs = {
+            "crop_ldd": d.get("crop_ldd", None),
+            "max_ecut": d.get("max_ecut", 99),
+            "state_err_avg": d.get("state_err_avg", 99),
+        }
         
-        result = max_ecut * logder_err
-        
-        # Search function need use min for best results error, the smaller the better so close to 0 is best
-        result = abs(result)
-        
+        result = penalty(**inputs)
+                
         self.out('result', orm.Float(result).store())
         

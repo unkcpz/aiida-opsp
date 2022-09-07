@@ -34,7 +34,7 @@ def run():
         dict={
             'llcol': 4, # fix
             'lpopt': 5, # 1-5, algorithm enum set
-            'rc(5)': 1.1,
+            'rc(5)': 2.2,
             'dvloc0': 0.0,
         }
     )

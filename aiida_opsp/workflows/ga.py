@@ -93,6 +93,10 @@ class GeneticAlgorithmWorkChain(WorkChain):
                 cls.local_search,
                 cls.combine_pop,
             ),
+            # finalize run
+            cls.launch_evaluation,
+            cls.get_results,
+            cls.combine_pop,
             cls.finalize,   # stop iteration and get results
         )
         spec.output('result', valid_type=orm.Dict)
@@ -314,7 +318,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
         for ind in self.ctx.elitism:
             inputs = {
                 'parameters': orm.Dict(dict={
-                    'max_iter': 2,
+                    'max_iter': 4,
                     'xtol': 1e-1,
                     'ftol': 1e-1,
                     'init_simplex': create_init_simplex(ind, tol=0.1)  # fitness=16.13

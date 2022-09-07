@@ -1,4 +1,4 @@
-from unittest import result
+import math
 from aiida.parsers import Parser
 from aiida import orm
 import io
@@ -12,21 +12,55 @@ from aiida import plugins
 
 UpfData = plugins.DataFactory('pseudo.upf')
 
-def compute_crop_l1err(atan_logders, emin, emax):
-    max_l1err = 0.0
+def compute_crop_l1err(atan_logders, lmax):
+    """
+    return a dict key is the range of crop, value is the integral and is the 
+    state type (bound/unbound)
+    energy integ ranges are:
+        -inf -> -5
+        -5. -> -2.
+        -2 -> 0
+        0 -> 2
+        2 -> 5
+        5 -> inf
+    """
+    r_dict = {
+        "ninf_n5": (-math.inf, -5.), 
+        "n5_n2": (-5, -2), 
+        "n2_0": (-2, 0), 
+        "0_2": (0, 2), 
+        "2_5": (2, 5), 
+        "5_inf": (5, math.inf),
+    }
+    crop_ldd = [] 
     for l in atan_logders.ae:
-        f1, f2 = atan_logders.ae[l], atan_logders.ps[l]
-        abs_diff = np.abs(f1.values - f2.values)
-        
-        # crop
-        condition = (emin < f1.energies) * (f1.energies < emax)
-        energies = np.extract(condition, f1.energies)
-        abs_diff = np.extract(condition, abs_diff)
-        
-        integ = cumtrapz(abs_diff, x=energies) / (energies[-1] - energies[0])
-        max_l1err = max(max_l1err, integ[-1])
-        
-    return float(max_l1err)
+        for k, r in r_dict.items():
+            f1, f2 = atan_logders.ae[l], atan_logders.ps[l]
+            abs_diff = np.abs(f1.values - f2.values)
+            
+            # crop
+            condition = (r[0] < f1.energies) * (f1.energies < r[1])
+            energies = np.extract(condition, f1.energies)
+            abs_diff = np.extract(condition, abs_diff)
+            
+            integ = cumtrapz(abs_diff, x=energies) / (energies[-1] - energies[0])
+            
+            if l < lmax+1:
+                # bound states
+                state_type = "bound"
+            else:
+                # unbound states
+                state_type = "unbound"
+                
+            crop_ldd.append({
+                "crop_range": k,
+                "l": l,
+                "state_type": state_type,
+                "integ": integ[-1],
+                # "int_range": r,
+            })
+    
+    return crop_ldd
 
 class OncvPseudoParser(Parser):
     """Parser for `OncvPseudoCalculation` parse output to pseudo and verifi results"""
@@ -45,7 +79,9 @@ class OncvPseudoParser(Parser):
             abi_parser = OncvParser(fpath)
             try:
                 abi_parser.scan()
-                crop_0_5_atan_logder_l1err = compute_crop_l1err(abi_parser.atan_logders, 0., 5)
+                
+                # crop_ldd is a dictionary for the ldd of every crop section
+                crop_ldd = compute_crop_l1err(abi_parser.atan_logders, abi_parser.lmax)
             except:
                 # not finish okay therefore not parsed
                 # TODO re-check the following exit states, will be override by this one
@@ -56,8 +92,7 @@ class OncvPseudoParser(Parser):
             results = abi_parser.get_results()
         
         output_parameters = {}
-        
-        output_parameters['crop_0_5_atan_logder_l1err'] = crop_0_5_atan_logder_l1err
+        output_parameters['crop_ldd'] = crop_ldd
         output_parameters['max_atan_logder_l1err'] = float(results['max_atan_logder_l1err'])
         output_parameters['max_ecut'] = float(results['max_ecut'])
         
@@ -137,8 +172,8 @@ def parse_configuration_test(test_idx, test_ctx):
         if 'WARNING lschvkbb convergence error' in line:
             # the test failed because of lschvkbk convergence error
             # regard it as very bad pseudopotential (the less value the better pseudo)
-            out['excitation_error'] = 99.
-            out['state_error_avg'] = 99.
+            out['excitation_err'] = 99.
+            out['state_err_avg'] = 99.
             
             return out
         
@@ -151,7 +186,7 @@ def parse_configuration_test(test_idx, test_ctx):
         
         state_error.append(float(diff.replace('D', 'E')))
         
-    out['state_error'] = state_error
-    out['state_error_avg'] = sum(state_error) / len(state_error)
+    out['state_err'] = state_error
+    out['state_err_avg'] = sum(state_error) / len(state_error)
     
     return out
