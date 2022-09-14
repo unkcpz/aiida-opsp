@@ -14,7 +14,7 @@ from plumpy.utils import AttributesFrozendict
 
 from aiida.orm.nodes.data.base import to_aiida_type
 
-from aiida_opsp.workflows.ls import LocalSearchWorkChain, create_init_simplex
+from aiida_opsp.workflows.ls import LocalSearchWorkChain
 
 
 # Generic process evaluation the code is ref from aiida-optimize
@@ -79,7 +79,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
         spec.input('parameters', valid_type=orm.Dict)
         spec.input('evaluate_process', help='Process which produces the result to be optimized.',
             **PROCESS_INPUT_KWARGS)
-        spec.input('input_nested_keys', valid_type=orm.List)    # map gene to input of evaluate process in oder
+        spec.input('vars_info', valid_type=orm.Dict)    # map gene to input of evaluate process in order
         spec.input('result_key', valid_type=orm.Str)    # name of key to be the result for fitness
         spec.input_namespace('fixture_inputs', required=False, dynamic=True)  # The fixed input parameters that will combined with change parameters
         
@@ -115,19 +115,20 @@ class GeneticAlgorithmWorkChain(WorkChain):
     def indices_to_retrieve(self, value):
         self.ctx.indices_to_retrieve = value
         
-    def _init_population(self, num_pop, gene_space, gene_type, seed):
-        """return numpy array"""
+    def _init_population(self, num_pop, genes, seed):
+        """return populations of one generation as a numpy array"""
         random.seed(f'init_pop_{seed}')
         
         # set an unassigned array
-        pop = np.empty([num_pop, len(gene_space)], dtype=float)
+        pop = np.empty([num_pop, len(genes)], dtype=float)
         
         for i in range(num_pop):
-            for j in range(len(gene_space)):
-                space = gene_space[j]
+            for j, (k, v) in enumerate(genes.items()):
+                space = v['space']
+                gene_type = v['type']
                 value = random.uniform(space['low'], space['high'])
                 
-                if gene_type[j] == 'int':
+                if gene_type == 'int':
                     pop[i][j] = int(round(value))
                 else:
                     pop[i][j] = round(value, 4)
@@ -150,9 +151,10 @@ class GeneticAlgorithmWorkChain(WorkChain):
         # population
         seed = self.ctx.seed = parameters['seed']
         num_pop = parameters['num_pop_per_generation']
-        gene_space = parameters['gene_space']
-        gene_type = parameters['gene_type']
-        self.ctx.population = self._init_population(num_pop, gene_space, gene_type, seed=seed)
+        genes = self.ctx.genes = self.inputs.vars_info.get_dict()
+        # built-in dict class gained the ability to remember 
+        # insertion order (this new behavior became guaranteed in Python 3.7).
+        self.ctx.population = self._init_population(num_pop, genes, seed=seed)
         
         # initialize the ctx variable to update during GA
         self.ctx.fitness = None
@@ -180,9 +182,11 @@ class GeneticAlgorithmWorkChain(WorkChain):
             
         return inputs
             
-    def _validate_ind(self, ind, gene_space, gene_type):
+    def _validate_ind(self, ind, genes):
         """validate and convert the ind to the correct type"""
         vind = []
+        gene_space = [i['space'] for i in genes.values()]
+        gene_type = [i['type'] for i in genes.values()]
         for i, s, t in zip(ind, gene_space, gene_type):
             if i < s['low'] or i > s['high']:
                 raise
@@ -209,17 +213,17 @@ class GeneticAlgorithmWorkChain(WorkChain):
         
         # submit evaluation for the pop ind
         evals = {}
+        input_mapping = [i["key_name"] for i in self.inputs.vars_info.get_dict().values()]
         for idx, ind in enumerate(self.ctx.population):
-            vind = self._validate_ind(ind, self.ctx.const_parameters['gene_space'], self.ctx.const_parameters['gene_type'])
+            vind = self._validate_ind(ind, self.ctx.genes)
             inputs = self._merge_nested_inputs(
-                self.inputs.input_nested_keys.get_list(), 
-                list(vind), 
-                self.inputs.get('fixture_inputs', {})
+                input_mapping=input_mapping, 
+                input_values=list(vind), 
+                fixture_inputs=self.inputs.get('fixture_inputs', {})
             )
             node = self.submit(evaluate_process, **inputs)
             evals[self.eval_key(idx)] = node
             self.indices_to_retrieve.append(idx)
-
             
         return self.to_context(**evals)
 
@@ -308,8 +312,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
             self.ctx.elitism,
             individual_mutate_probability=1.0,
             gene_mutate_probability=0.9, 
-            gene_space=self.ctx.const_parameters['gene_space'],
-            gene_type=self.ctx.const_parameters['gene_type'],
+            genes=self.ctx.genes,
             seed=self.ctx.seed,
             gaussian=True,
         )
@@ -319,8 +322,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
             self.ctx.offspring, 
             individual_mutate_probability=self.ctx.const_parameters['individual_mutate_probability'], 
             gene_mutate_probability=self.ctx.const_parameters['gene_mutate_probability'], 
-            gene_space=self.ctx.const_parameters['gene_space'],
-            gene_type=self.ctx.const_parameters['gene_type'],
+            genes=self.ctx.genes,
             seed=self.ctx.seed
         )
         
@@ -329,17 +331,18 @@ class GeneticAlgorithmWorkChain(WorkChain):
         # self.report(f'new population: {self.ctx.population}')
         
     def local_search(self):
-        # local_search of elitism
+        """ local_search of elitism
+        """
         for ind in self.ctx.elitism:
             inputs = {
                 'parameters': orm.Dict(dict={
                     'max_iter': 4,
                     'xtol': 1e-1,
                     'ftol': 1e-1,
-                    'init_simplex': create_init_simplex(ind, tol=0.1)  # fitness=16.13
+                    'init_vars': list(ind)
                 }),
                 'evaluate_process': self.inputs.evaluate_process,
-                'input_nested_keys': self.inputs.input_nested_keys,
+                'vars_info': self.inputs.vars_info,
                 'result_key': self.inputs.result_key,
                 'fixture_inputs': self.inputs.fixture_inputs,
             }
@@ -425,7 +428,7 @@ def _crossover(parents, num_offsprings, seed):
         
     return offspring
 
-def _mutate(inds, individual_mutate_probability, gene_mutate_probability, gene_space, gene_type, seed, gaussian=False):
+def _mutate(inds, individual_mutate_probability, gene_mutate_probability, genes, seed, gaussian=False):
     """docstring"""
     random.seed(f'mutate_{seed}')
     
@@ -439,8 +442,9 @@ def _mutate(inds, individual_mutate_probability, gene_mutate_probability, gene_s
     num_inds, num_genes = inds.shape    
     mut_inds = np.empty([num_inds, num_genes], dtype=float)
     for i in range(num_inds):
-        for j in range(num_genes):
-            space = gene_space[j]
+        for j, (k, v) in enumerate(genes.items()):
+            space = v['space']
+            gene_type = v['type']
             # based of probability, keep original value if not being hit
             # TODO: if not fully random but a pertubation may better??
             if random.random() < gene_mutate_probability:
@@ -450,7 +454,7 @@ def _mutate(inds, individual_mutate_probability, gene_mutate_probability, gene_s
                 else:
                     value = random.uniform(space['low'], space['high'])
                 
-                if gene_type[j] == 'int':
+                if gene_type == 'int':
                     mut_inds[i, j] = int(round(value))
                 else:
                     mut_inds[i, j] = round(value, 4)

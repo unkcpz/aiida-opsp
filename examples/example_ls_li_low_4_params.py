@@ -21,8 +21,8 @@ def run():
                 'debl': 2.0,
             },
             'p': {
-                # 'rc': 2.2,
-                # 'qcut': 7.0,
+                'rc': 2.2,
+                'qcut': 7.0,
                 'ncon': 3,
                 'nbas': 7,
                 'nproj': 2,
@@ -51,22 +51,59 @@ def run():
             'max_iter': 2,
             'xtol': 1e-1,
             'ftol': 1e-1,
-            # 'init_simplex': create_init_simplex([1.5831, 5.5998, 2.2045, 9.5575], tol=0.1)  # fitness=183.25
-            'init_simplex': create_init_simplex([2.8342, 4.4971, 2.5851, 8.5906], tol=0.1)  # fitness=16.13
-            # 'init_simplex': [   # fitness=16.13
-            #     [2.8342, 4.4971, 2.5851, 8.5906], 
-            #     [2.9342, 4.3971, 2.6851, 9.5906], 
-            #     [2.7342, 4.7971, 2.2851, 8.7906], 
-            # ],
+            'init_vars': [2.872,  2.5731, 6,     3,     8.9284],
         }),
         'evaluate_process': OncvPseudoBaseWorkChain,
-        'input_nested_keys': orm.List(list=[
-            'angular_momentum_settings:s.rc',
-            'angular_momentum_settings:s.qcut',
-            'angular_momentum_settings:p.rc',
-            'angular_momentum_settings:p.qcut',
-        ]
-        ),
+        'vars_info': orm.Dict(dict={
+            's_rc': {
+                'key_name': 'angular_momentum_settings:s.rc',
+                'type': 'float',
+                'space': {
+                    'low': 2.2, 
+                    'high': 3.0,
+                },
+                'local_optimize': True,
+            },
+            's_qcut': {
+                'key_name': 'angular_momentum_settings:s.qcut',
+                'type': 'float',
+                'space': {
+                    'low': 4.0, 
+                    'high': 10.0,
+                },
+                'local_optimize': True,
+            },
+            's_ncon': {
+                'key_name': 'angular_momentum_settings:s.ncon',
+                'type': 'int',
+                'space': {
+                    'low': 3, 
+                    'high': 4,
+                },
+                'local_optimize': False,
+            },
+            's_nbas': {
+                'key_name': 'angular_momentum_settings:s.nbas',
+                'type': 'int',
+                'space': {
+                    'low': 5, 
+                    'high': 7,
+                },
+                # 'local_optimize': False,
+            },
+            # 'angular_momentum_settings:s.nproj',
+            's_debl': {
+                'key_name': 'angular_momentum_settings:s.debl',
+                'type': 'float',
+                'space': {
+                    'low': 0, 
+                    'high': 3.0,
+                },
+                'local_optimize': True,
+            },
+            # 'local_potential_settings:rc(5)',
+            # 'local_potential_settings:dvloc0',            
+        }),
         'result_key': orm.Str('result'),
         'fixture_inputs': {
             'code': code,
@@ -82,27 +119,6 @@ def run():
     res, pk = run_get_pk(LocalSearchWorkChain, **inputs)
 
     return res, pk
-
-# def run_test():
-#     inputs = {
-#         'parameters': orm.Dict(dict={
-#             'max_iter': 10,
-#             'xtol': 1e-1,
-#             'ftol': 1e-1,
-#             'init_simplex': [[1.2, 0.9], [1.0, 2.0], [2.0, 1.0]],
-#         }),
-#         'evaluate_process': Rosenbrock,
-#         'input_nested_keys': orm.List(list=[
-#             'x',
-#             'y',
-#         ]
-#         ),
-#         'result_key': orm.Str('result'),
-#         'fixture_inputs': {},
-#     }
-#     res, pk = run_get_pk(LocalSearchWorkChain, **inputs)
-
-#     return res, pk
     
 
 if __name__ == '__main__':

@@ -53,7 +53,7 @@ def create_init_simplex(xs, tol=0.2):
         
         ret.append(xss)
         
-    return ret
+    return np.array(ret)
 
 @singledispatch
 def get_fullname(cls_obj):
@@ -101,7 +101,7 @@ class LocalSearchWorkChain(WorkChain):
         spec.input('parameters', valid_type=orm.Dict)
         spec.input('evaluate_process', help='Process which produces the result to be optimized.',
             **PROCESS_INPUT_KWARGS)
-        spec.input('input_nested_keys', valid_type=orm.List)    # map gene to input of evaluate process in oder
+        spec.input('vars_info', valid_type=orm.Dict)    # map gene to input of evaluate process in oder
         spec.input('result_key', valid_type=orm.Str)    # name of key to be the result for fitness
         spec.input_namespace('fixture_inputs', required=False, dynamic=True)  # The fixed input parameters that will combined with change parameters
         
@@ -139,6 +139,21 @@ class LocalSearchWorkChain(WorkChain):
             'ERROR_EVALUATE_PROCESS_FAILED',
             message='GA optimization failed because one of the evaluate processes did not finish ok.'
         )
+        
+    def _restore_ind(self, simplex, vars_info, fixture_vars):
+        """restore inputs for submission from vars_info"""
+        vind = []
+        i = 0
+        j = 0
+        for (k, v) in vars_info.items():
+            if v.get("local_optimize", False):
+                vind.append(simplex[i])
+                i += 1
+            else:
+                vind.append(fixture_vars[j])
+                j += 1
+                
+        return vind
 
     def _submit(self, name="unknow operation"):
         """
@@ -152,17 +167,35 @@ class LocalSearchWorkChain(WorkChain):
         
         # submit evaluation for the pop ind
         evals = {}
-        for idx, ind in enumerate(self.ctx._to_evaluate_simplex):
+        input_mapping = [i["key_name"] for i in self.inputs.vars_info.get_dict().values()]
+        for idx, simplex in enumerate(self.ctx._to_evaluate_simplex):
+            vind = self._restore_ind(simplex, self.inputs.vars_info.get_dict(), self.ctx.fixture_vars)
+            # import ipdb; ipdb.set_trace()
             inputs = self._merge_nested_inputs(
-                self.inputs.input_nested_keys.get_list(), 
-                list(ind), 
-                self.inputs.get('fixture_inputs', {})
+                input_mapping=input_mapping, 
+                input_values=vind, 
+                fixture_inputs=self.inputs.get('fixture_inputs', {})
             )
             node = self.submit(evaluate_process, **inputs)
             evals[self.eval_key(idx)] = node
             self.indices_to_retrieve.append(idx)
 
         return self.to_context(**evals)
+    
+    def _separate_vars(self, vars, vars_info):
+        """Separate vars to simplex and fixture_vars
+        return two list.
+        Simplex is used for optimization, fixture_vars will 
+        then used for restore the origin vars dimension."""
+        simplex = []
+        fixture_vars = []
+        for i, (k, v) in enumerate(vars_info.items()):
+            if v.get("local_optimize", False):
+                simplex.append(vars[i])
+            else:
+                fixture_vars.append(vars[i])
+                
+        return simplex, fixture_vars
         
     def submit_init(self):
         # to store const parameters in ctx over GA procedure
@@ -174,8 +207,10 @@ class LocalSearchWorkChain(WorkChain):
         # new_simplex keep track the entities to evaluated can be three for initialize and then 
         # one for expansion, contraction and shrink
         # simplex only keep the final simplex
-        self.ctx._to_evaluate_simplex = self.ctx.simplex = np.array(parameters['init_simplex'])
-        
+        simplex, self.ctx.fixture_vars = self._separate_vars(parameters['init_vars'], self.inputs.vars_info.get_dict())
+        self.report(f"simplex: {simplex}, fixture_vars: {self.ctx.fixture_vars}")
+        self.ctx._to_evaluate_simplex = self.ctx.simplex = create_init_simplex(simplex, tol=0.1)
+
         assert len(self.ctx.simplex) == self.ctx.simplex.shape[1] + 1
         self.len_simplex = len(self.ctx.simplex)
         self.ctx.fun_simplex = [np.nan for _ in range(self.len_simplex)]
