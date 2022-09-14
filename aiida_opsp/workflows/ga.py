@@ -53,20 +53,6 @@ def load_object(cls_name):
             return yaml.load(cls_name_str[len(_YAML_IDENTIFIER):])
         raise ValueError(f"Could not load class name '{cls_name_str}'.") from err
 
-#### The keys used for GA parameters
-# 'num_generation': 20,
-# 'num_pop_per_generation': 20,
-# 'num_genes': 2, # check shape compatible with gene_space
-# 'num_mating_parents': 15,
-# 'num_elitism': 2,
-# 'num_mutation_genes': 2,    # not being used
-# 'individual_mutate_probability': 1.0,
-# 'gene_mutate_probability': 0.2,
-# 'crossover_probability': 0.0,
-# 'gene_space': [{'low': 1.0, 'high': 2.0}, {'low': 4.0, 'high': 14.0}],
-# 'gene_type': ['float', 'float'],
-# 'seed': 979,
-
 class GeneticAlgorithmWorkChain(WorkChain):
     """WorkChain to run GA """
     
@@ -121,17 +107,44 @@ class GeneticAlgorithmWorkChain(WorkChain):
         
         # set an unassigned array
         pop = np.empty([num_pop, len(genes)], dtype=float)
-        
+
         for i in range(num_pop):
-            for j, (k, v) in enumerate(genes.items()):
+            _inds = {}
+            for k, v in genes.items():
+                # the first for to collect all not related range setting for base.
                 space = v['space']
                 gene_type = v['type']
-                value = random.uniform(space['low'], space['high'])
                 
-                if gene_type == 'int':
-                    pop[i][j] = int(round(value))
-                else:
-                    pop[i][j] = round(value, 4)
+                refto = space.get("refto", None)
+                if refto is None:
+                    x = random.uniform(space['low'], space['high'])
+
+                    if gene_type == 'int':
+                        x = int(round(x))
+                    else:
+                        x = round(x, 4)
+
+                    _inds[k] = x                
+                
+            for k, v in genes.items():
+                # the second for to set the relavent range from base
+                space = v['space']
+                gene_type = v['type']
+                refto = space.get("refto", None)
+                if refto is not None:
+                    base = _inds[refto]
+                    x = base + random.uniform(space['low'], space['high'])
+                    
+                    if gene_type == 'int':
+                        x = int(round(x))
+                    else:
+                        x = round(x, 4)
+
+                    _inds[k] = x  
+                
+            # Set pop
+            for j, key in enumerate(genes.keys()):
+                pop[i][j] = _inds[key]
                 
         return pop
     
@@ -187,9 +200,13 @@ class GeneticAlgorithmWorkChain(WorkChain):
         vind = []
         for i, (k, v) in enumerate(genes.items()):
             x = ind[i]
-            if x < v["space"]["low"] or x > v["space"]["high"]:
-                self.report(f"!!!WARNING: gene {k} = {x} is out of range {v['space']['low']} < x < {v['space']['high']}.")
-            
+            if v["space"].get("refto", None) is None:
+                if x < v["space"]["low"] or x > v["space"]["high"]:
+                    self.report(f"!!!WARNING: gene {k} = {x} is out of range {v['space']['low']} < x < {v['space']['high']}.")
+            # else:
+            # TODO: add contruct _inds dict function and check the range of it.
+                
+                
             if v["type"] == "int":
                 x = int(x)
                 
@@ -441,6 +458,10 @@ def _mutate(inds, individual_mutate_probability, gene_mutate_probability, genes,
     num_inds, num_genes = inds.shape    
     mut_inds = np.empty([num_inds, num_genes], dtype=float)
     for i in range(num_inds):
+        _d_ind = {}
+        for j, (k, v) in enumerate(genes.items()):
+            _d_ind[k] = inds[i][j]
+        
         for j, (k, v) in enumerate(genes.items()):
             space = v['space']
             gene_type = v['type']
@@ -449,17 +470,35 @@ def _mutate(inds, individual_mutate_probability, gene_mutate_probability, genes,
             if random.random() < gene_mutate_probability:
                 if gaussian:
                     old_value = inds[i, j]
-                    value = random.gauss(old_value, sigma=old_value/10)
+                    x = random.gauss(old_value, sigma=old_value/10)
+                    
+                    if gene_type == 'int':
+                        x = int(round(x))
+                    else:
+                        x = round(x, 4)
+
+                    _d_ind[k] = x    
                 else:
-                    value = random.uniform(space['low'], space['high'])
-                
-                if gene_type == 'int':
-                    mut_inds[i, j] = int(round(value))
-                else:
-                    mut_inds[i, j] = round(value, 4)
+                    refto = space.get("refto", None)
+                    if refto:
+                        base = _d_ind[refto]
+                        x = base + random.uniform(space['low'], space['high'])
+                    else:
+                        x = random.uniform(space['low'], space['high'])
+                        
+                    if gene_type == 'int':
+                        x = int(round(x))
+                    else:
+                        x = round(x, 4)
+
+                    _d_ind[k] = x    
             else:
                 mut_inds[i, j] = inds[i, j]
-                        
+                
+        # Set pop
+        for j, key in enumerate(genes.keys()):
+            mut_inds[i, j] = _d_ind[key]                
+            
     return mut_inds
 
 def _merge_nested_keys(nested_key_inputs, target_inputs):

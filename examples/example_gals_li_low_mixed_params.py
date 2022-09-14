@@ -20,12 +20,12 @@ def run():
                 # 'debl': 2.0,
             },
             'p': {
-                'rc': 2.2,
-                'qcut': 7.0,
-                'ncon': 3,
-                'nbas': 7,
+                # 'rc': 2.2,
+                # 'qcut': 7.0,
+                # 'ncon': 3,
+                # 'nbas': 7,
                 'nproj': 2,
-                'debl': 3.5,
+                # 'debl': 3.5,
             }, 
         }
     )
@@ -49,7 +49,6 @@ def run():
         'parameters': orm.Dict(dict={
             'num_generation': 2,
             'num_pop_per_generation': 10,
-            'num_genes': 5, # check shape compatible with gene_space
             'num_mating_parents': 6,
             'num_elitism': 2,
             'individual_mutate_probability': 1.0,
@@ -89,9 +88,9 @@ def run():
                 'key_name': 'angular_momentum_settings:s.nbas',
                 'type': 'int',
                 'space': {
-                    # 'refto': 's_ncon',
-                    'low': 5, 
-                    'high': 7,
+                    'refto': 's_ncon',
+                    'low': 3, 
+                    'high': 5,
                 },
                 # 'local_optimize': False,
             },
@@ -105,8 +104,52 @@ def run():
                 },
                 'local_optimize': True,
             },
-            # 'local_potential_settings:rc(5)',
-            # 'local_potential_settings:dvloc0',            
+            'p_rc': {
+                'key_name': 'angular_momentum_settings:p.rc',
+                'type': 'float',
+                'space': {
+                    'low': 2.2, 
+                    'high': 3.0,
+                },
+                'local_optimize': True,
+            },
+            'p_qcut': {
+                'key_name': 'angular_momentum_settings:p.qcut',
+                'type': 'float',
+                'space': {
+                    'low': 4.0, 
+                    'high': 10.0,
+                },
+                'local_optimize': True,
+            },
+            'p_ncon': {
+                'key_name': 'angular_momentum_settings:p.ncon',
+                'type': 'int',
+                'space': {
+                    'low': 3, 
+                    'high': 4,
+                },
+                'local_optimize': False,
+            },
+            'p_nbas': {
+                'key_name': 'angular_momentum_settings:p.nbas',
+                'type': 'int',
+                'space': {
+                    'refto': 'p_ncon',
+                    'low': 3, 
+                    'high': 5,
+                },
+                # 'local_optimize': False,
+            },
+            'p_debl': {
+                'key_name': 'angular_momentum_settings:p.debl',
+                'type': 'float',
+                'space': {
+                    'low': 0, 
+                    'high': 3.0,
+                },
+                'local_optimize': True,
+            },         
         }),
         'result_key': orm.Str('result'),
         'fixture_inputs': {
