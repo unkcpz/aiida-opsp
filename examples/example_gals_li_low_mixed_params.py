@@ -89,6 +89,7 @@ def run():
                 'key_name': 'angular_momentum_settings:s.nbas',
                 'type': 'int',
                 'space': {
+                    # 'refto': 's_ncon',
                     'low': 5, 
                     'high': 7,
                 },

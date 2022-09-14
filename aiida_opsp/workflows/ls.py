@@ -147,10 +147,18 @@ class LocalSearchWorkChain(WorkChain):
         j = 0
         for (k, v) in vars_info.items():
             if v.get("local_optimize", False):
-                vind.append(simplex[i])
+                if v["type"] == "int":
+                    x = int(simplex[i])
+                else:
+                    x = simplex[i]
+                vind.append(x)
                 i += 1
             else:
-                vind.append(fixture_vars[j])
+                if v["type"] == "int":
+                    y = int(fixture_vars[j])
+                else:
+                    y = fixture_vars[j]
+                vind.append(y)
                 j += 1
                 
         return vind
@@ -458,9 +466,13 @@ class LocalSearchWorkChain(WorkChain):
 
     def finalize_inspect(self):
         self.report(f'on stop: simplex is {self.ctx.simplex}, fun_simplex is {self.ctx.fun_simplex}')
+        xs = self._restore_ind(
+            simplex=list(self.ctx.simplex[0, :]), 
+            vars_info=self.inputs.vars_info.get_dict(), 
+            fixture_vars=self.ctx.fixture_vars)
         self.out('result', orm.Dict(dict={
                 'num_iter': self.ctx.num_iter,
-                'xs': list(self.ctx.simplex[0, :]),
+                'xs': xs,
                 'y': float(self.ctx.fun_simplex[0]),
             }).store())
 

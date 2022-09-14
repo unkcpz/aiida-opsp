@@ -51,7 +51,7 @@ def run():
             'max_iter': 2,
             'xtol': 1e-1,
             'ftol': 1e-1,
-            'init_vars': [2.872,  2.5731, 6,     3,     8.9284],
+            'init_vars': [2.872,  2.5731, 6.,     3.,     8.9284],
         }),
         'evaluate_process': OncvPseudoBaseWorkChain,
         'vars_info': orm.Dict(dict={

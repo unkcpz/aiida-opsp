@@ -185,16 +185,15 @@ class GeneticAlgorithmWorkChain(WorkChain):
     def _validate_ind(self, ind, genes):
         """validate and convert the ind to the correct type"""
         vind = []
-        gene_space = [i['space'] for i in genes.values()]
-        gene_type = [i['type'] for i in genes.values()]
-        for i, s, t in zip(ind, gene_space, gene_type):
-            if i < s['low'] or i > s['high']:
-                raise
+        for i, (k, v) in enumerate(genes.items()):
+            x = ind[i]
+            if x < v["space"]["low"] or x > v["space"]["high"]:
+                self.report(f"!!!WARNING: gene {k} = {x} is out of range {v['space']['low']} < x < {v['space']['high']}.")
             
-            if t == "int":  # TODO: more intellegent
-                i = int(i)
+            if v["type"] == "int":
+                x = int(x)
                 
-            vind.append(i)
+            vind.append(x)
             
         return vind
                 
