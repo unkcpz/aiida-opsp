@@ -128,9 +128,9 @@ class GeneticAlgorithmWorkChain(WorkChain):
                 value = random.uniform(space['low'], space['high'])
                 
                 if gene_type[j] == 'int':
-                    value = round(value)
-                    
-                pop[i][j] = round(value, 4)
+                    pop[i][j] = int(round(value))
+                else:
+                    pop[i][j] = round(value, 4)
                 
         return pop
     
@@ -180,6 +180,20 @@ class GeneticAlgorithmWorkChain(WorkChain):
             
         return inputs
             
+    def _validate_ind(self, ind, gene_space, gene_type):
+        """validate and convert the ind to the correct type"""
+        vind = []
+        for i, s, t in zip(ind, gene_space, gene_type):
+            if i < s['low'] or i > s['high']:
+                raise
+            
+            if t == "int":  # TODO: more intellegent
+                i = int(i)
+                
+            vind.append(i)
+            
+        return vind
+                
         
     def launch_evaluation(self):
         """
@@ -196,9 +210,10 @@ class GeneticAlgorithmWorkChain(WorkChain):
         # submit evaluation for the pop ind
         evals = {}
         for idx, ind in enumerate(self.ctx.population):
+            vind = self._validate_ind(ind, self.ctx.const_parameters['gene_space'], self.ctx.const_parameters['gene_type'])
             inputs = self._merge_nested_inputs(
                 self.inputs.input_nested_keys.get_list(), 
-                list(ind), 
+                list(vind), 
                 self.inputs.get('fixture_inputs', {})
             )
             node = self.submit(evaluate_process, **inputs)
@@ -436,8 +451,9 @@ def _mutate(inds, individual_mutate_probability, gene_mutate_probability, gene_s
                     value = random.uniform(space['low'], space['high'])
                 
                 if gene_type[j] == 'int':
-                    value = round(value)
-                mut_inds[i, j] = round(value, 4)
+                    mut_inds[i, j] = int(round(value))
+                else:
+                    mut_inds[i, j] = round(value, 4)
             else:
                 mut_inds[i, j] = inds[i, j]
                         
