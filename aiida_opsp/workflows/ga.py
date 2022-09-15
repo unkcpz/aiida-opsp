@@ -350,13 +350,11 @@ class GeneticAlgorithmWorkChain(WorkChain):
         """ local_search of elitism
         """
         for ind in self.ctx.elitism:
+            ls_parameters = self.ctx.const_parameters['local_search_base_parameters']
+            ls_parameters['init_vars'] = list(ind)
+            
             inputs = {
-                'parameters': orm.Dict(dict={
-                    'max_iter': 4,
-                    'xtol': 1e-1,
-                    'ftol': 1e-1,
-                    'init_vars': list(ind)
-                }),
+                'parameters': orm.Dict(dict=ls_parameters),
                 'evaluate_process': self.inputs.evaluate_process,
                 'vars_info': self.inputs.vars_info,
                 'result_key': self.inputs.result_key,

@@ -54,6 +54,11 @@ def run():
             'individual_mutate_probability': 1.0,
             'gene_mutate_probability': 0.4,
             'seed': 979,
+            'local_search_base_parameters': {
+                'max_iter': 2,
+                'xtol': 1e-1,
+                'ftol': 1e-1,
+            }
         }),
         'evaluate_process': OncvPseudoBaseWorkChain,
         'vars_info': orm.Dict(dict={
