@@ -32,9 +32,9 @@ def run():
     local_potential_settings = orm.Dict(
         dict={
             'llcol': 4, # fix
-            'lpopt': 5, # 1-5, algorithm enum set
-            'rc(5)': 2.2,
-            'dvloc0': 2.0,
+            # 'lpopt': 5, # 1-5, algorithm enum set
+            # 'rc(5)': 2.2,
+            # 'dvloc0': 2.0,
         }
     )
     nlcc_settings = orm.Dict(
@@ -61,8 +61,9 @@ def run():
                 'key_name': 'angular_momentum_settings:s.rc',
                 'type': 'float',
                 'space': {
-                    'low': 2.2, 
-                    'high': 3.0,
+                    'refto': 'rc(5)',
+                    'low': 0, 
+                    'high': 2.0,
                 },
                 'local_optimize': True,
             },
@@ -108,8 +109,9 @@ def run():
                 'key_name': 'angular_momentum_settings:p.rc',
                 'type': 'float',
                 'space': {
-                    'low': 2.2, 
-                    'high': 3.0,
+                    'refto': 'rc(5)',
+                    'low': 0, 
+                    'high': 2.0,
                 },
                 'local_optimize': True,
             },
@@ -149,7 +151,34 @@ def run():
                     'high': 3.0,
                 },
                 'local_optimize': True,
-            },         
+            },       
+            'lpopt': {
+                'key_name': 'local_potential_settings:lpopt',
+                'type': 'int',
+                'space': {
+                    'low': 1, 
+                    'high': 5,
+                },
+                'local_optimize': False,
+            },
+            'rc(5)': {
+                'key_name': 'local_potential_settings:rc(5)',
+                'type': 'float',
+                'space': {
+                    'low': 0.5, 
+                    'high': 3.0,
+                },
+                'local_optimize': True,
+            },       
+            'dvloc0': {
+                'key_name': 'local_potential_settings:dvloc0',
+                'type': 'float',
+                'space': {
+                    'low': 0, 
+                    'high': 3.0,
+                },
+                'local_optimize': True,
+            },                
         }),
         'result_key': orm.Str('result'),
         'fixture_inputs': {
