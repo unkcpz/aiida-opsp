@@ -47,15 +47,16 @@ def run():
     
     inputs = {
         'parameters': orm.Dict(dict={
-            'num_generation': 2,
-            'num_pop_per_generation': 10,
-            'num_mating_parents': 6,
+            'num_generation': 20,
+            'num_pop_per_generation': 20,
+            'num_mating_parents': 16,
             'num_elitism': 2,
             'individual_mutate_probability': 1.0,
-            'gene_mutate_probability': 0.4,
+            'gene_mutate_elitism_probability': 0.9, # high mutate rate since using gaussian for mutate
+            'gene_mutate_mediocrity_probability': 0.4,
             'seed': 979,
             'local_search_base_parameters': {
-                'max_iter': 2,
+                'max_iter': 10,
                 'xtol': 1e-1,
                 'ftol': 1e-1,
             }

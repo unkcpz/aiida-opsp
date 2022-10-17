@@ -326,8 +326,8 @@ class GeneticAlgorithmWorkChain(WorkChain):
         # mutation elitism
         self.ctx.mut_elitism = _mutate(
             self.ctx.elitism,
-            individual_mutate_probability=1.0,
-            gene_mutate_probability=0.9, 
+            individual_mutate_probability=self.ctx.const_parameters['individual_mutate_probability'],
+            gene_mutate_probability=self.ctx.const_parameters['gene_mutate_elitism_probability'], 
             genes=self.ctx.genes,
             seed=self.ctx.seed,
             gaussian=True,
@@ -337,7 +337,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
         self.ctx.mut_offspring = _mutate(
             self.ctx.offspring, 
             individual_mutate_probability=self.ctx.const_parameters['individual_mutate_probability'], 
-            gene_mutate_probability=self.ctx.const_parameters['gene_mutate_probability'], 
+            gene_mutate_probability=self.ctx.const_parameters['gene_mutate_mediocrity_probability'], 
             genes=self.ctx.genes,
             seed=self.ctx.seed
         )

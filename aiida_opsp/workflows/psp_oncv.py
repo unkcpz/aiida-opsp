@@ -10,11 +10,11 @@ def penalty(crop_ldd=None, max_ecut=None, state_err_avg=None):
     # set range for crop intg (-inf, -5) (-5, -2) (-2, 0) (0, 2) (2, 5) (5, inf)
     crop_weight_dict = {
         "ninf_n5": 0, 
-        "n5_n2": 1, 
-        "n2_0": 1, 
-        "0_2": 5, 
-        "2_5": 5, 
-        "5_inf": 5,
+        "n5_n2": 3, 
+        "n2_0": 2.5, 
+        "0_2": 2.5, 
+        "2_5": 3, 
+        "5_inf": 0.2,
     }
     
     state_type_weight_dict = {
@@ -33,7 +33,7 @@ def penalty(crop_ldd=None, max_ecut=None, state_err_avg=None):
 
     # TODO: state_err_avg
     
-    res_cost += max_ecut * 0.5
+    res_cost += max_ecut * 0.2
     
     # Search function need use min for best results error, the smaller the better so close to 0 is best
     return res_cost
