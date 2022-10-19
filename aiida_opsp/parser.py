@@ -21,16 +21,18 @@ def compute_crop_l1err(atan_logders, lmax):
         -5. -> -2.
         -2 -> 0
         0 -> 2
-        2 -> 5
-        5 -> inf
+        2 -> 6
+        6 -> 8
+        8 -> inf
     """
     r_dict = {
         "ninf_n5": (-math.inf, -5.), 
         "n5_n2": (-5, -2), 
         "n2_0": (-2, 0), 
         "0_2": (0, 2), 
-        "2_5": (2, 5), 
-        "5_inf": (5, math.inf),
+        "2_6": (2, 6), 
+        "6_8": (6, 8),
+        "8_inf": (8, math.inf),
     }
     crop_ldd = [] 
     for l in atan_logders.ae:
@@ -88,6 +90,14 @@ class OncvPseudoParser(Parser):
                 output_parameters = {}
                 self.out('output_parameters', orm.Dict(dict=output_parameters))
                 return self.exit_codes.get('ERROR_ABIPY_NOT_PARSED')
+            else:
+                if abi_parser._errors:
+                    output_parameters = {
+                        "error": abi_parser._errors,
+                    }
+                    self.out('output_parameters', orm.Dict(dict=output_parameters))
+                    return self.exit_codes.get('ERROR_GHOST_OR_FCFACT')
+            
             
             results = abi_parser.get_results()
         

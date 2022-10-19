@@ -7,19 +7,20 @@ def penalty(crop_ldd=None, max_ecut=None, state_err_avg=None):
     if crop_ldd is None:
         return abs(9999)
 
-    # set range for crop intg (-inf, -5) (-5, -2) (-2, 0) (0, 2) (2, 5) (5, inf)
+    # set range for crop intg (-inf, -5) (-5, -2) (-2, 0) (0, 2) (2, 6), (6, 8) (8, inf)
     crop_weight_dict = {
         "ninf_n5": 0, 
-        "n5_n2": 3, 
-        "n2_0": 2.5, 
+        "n5_n2": 0.5, 
+        "n2_0": 0.5, 
         "0_2": 2.5, 
-        "2_5": 3, 
-        "5_inf": 0.2,
+        "2_6": 4,
+        "6_8": 1, 
+        "8_inf": 0.5,
     }
     
     state_type_weight_dict = {
         "bound": 1,
-        "unbound": 0.1,
+        "unbound": 0.2,
     }
     
     res_cost = 0.

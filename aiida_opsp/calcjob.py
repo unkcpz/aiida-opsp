@@ -37,7 +37,9 @@ class OncvPseudoCalculation(CalcJob):
         spec.exit_code(502, 'ERROR_LSCHVKBB',
             message='The lschvkbb error.')  
         spec.exit_code(503, 'ERROR_ABIPY_NOT_PARSED',
-            message='Exception while parsing using abipy.')  
+            message='Exception while parsing using abipy.')
+        spec.exit_code(504, 'ERROR_GHOST_OR_FCFACT',
+            message='Has Ghost or for example fcfact > 0.0. for icmod=1.')
         
         
         spec.inputs['metadata']['options']['input_filename'].default = 'aiida.in'
