@@ -35,7 +35,7 @@ local_potential_settings = orm.Dict(
 )
 nlcc_settings = orm.Dict(
     dict={
-        'icmod': 3,
+        'icmod': 4,
         'fcfact': 5.0,
         'rcfact': 1.4,
     }

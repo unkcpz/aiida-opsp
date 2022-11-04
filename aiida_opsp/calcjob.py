@@ -158,7 +158,9 @@ class OncvPseudoCalculation(CalcJob):
         
         inp.append('# MODEL CORE CHARGE')
         icmod = nlcc_settings.get('icmod')
-        fcfact = nlcc_settings.get('fcfact')
+        fcfact = nlcc_settings.get('fcfact', None)
+        if not fcfact:
+            raise "fcfact can't be empty."
         rcfact = nlcc_settings.get('rcfact', '')
         lst = [icmod, fcfact, rcfact]
         inp.append(' '.join(str(e) for e in lst))
