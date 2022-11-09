@@ -1,4 +1,4 @@
-label: "localhost1"
+label: "localhost"
 hostname: "localhost"
 description: EPFL theospc38 computer for test purpose
 transport: "core.local"

@@ -6,7 +6,7 @@ from aiida_opsp.workflows.ga import GeneticAlgorithmWorkChain
 from aiida_opsp.workflows.psp_oncv import OncvPseudoBaseWorkChain
 
 def run():
-    code = orm.load_code('oncv4@localhost1')
+    code = orm.load_code('oncv4@localhost')
 
     conf_name = orm.Str('Li-low')
     angular_momentum_settings = orm.Dict(

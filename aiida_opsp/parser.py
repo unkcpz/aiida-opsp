@@ -1,4 +1,3 @@
-import math
 from aiida.parsers import Parser
 from aiida import orm
 import io
@@ -7,62 +6,79 @@ import numpy as np
 from scipy.integrate import cumtrapz
 import os
 from abipy.ppcodes.oncv_parser import OncvParser
+from collections import namedtuple
+import numpy as np
 
 from aiida import plugins
 
 UpfData = plugins.DataFactory('pseudo.upf')
+Fd_Params = namedtuple("Fermi_Dirac", ['energy', 'sigma', 'mirror']) # mirror for upside down upon 0.5
 
-def compute_crop_l1err(atan_logders, lmax):
-    """
-    return a dict key is the range of crop, value is the integral and is the 
-    state type (bound/unbound)
-    energy integ ranges are:
-        -inf -> -5
-        -5. -> -2.
-        -2 -> 0
-        0 -> 2
-        2 -> 6
-        6 -> 8
-        8 -> inf
-    """
-    r_dict = {
-        "ninf_n5": (-math.inf, -5.), 
-        "n5_n2": (-5, -2), 
-        "n2_0": (-2, 0), 
-        "0_2": (0, 2), 
-        "2_6": (2, 6), 
-        "6_8": (6, 8),
-        "8_inf": (8, math.inf),
-    }
-    crop_ldd = [] 
-    for l in atan_logders.ae:
-        for k, r in r_dict.items():
-            f1, f2 = atan_logders.ae[l], atan_logders.ps[l]
-            abs_diff = np.abs(f1.values - f2.values)
-            
-            # crop
-            condition = (r[0] < f1.energies) * (f1.energies < r[1])
-            energies = np.extract(condition, f1.energies)
-            abs_diff = np.extract(condition, abs_diff)
-            
-            integ = cumtrapz(abs_diff, x=energies) / (energies[-1] - energies[0])
-            
-            if l < lmax+1:
-                # bound states
-                state_type = "bound"
-            else:
-                # unbound states
-                state_type = "unbound"
-                
-            crop_ldd.append({
-                "crop_range": k,
-                "l": l,
-                "state_type": state_type,
-                "integ": integ[-1],
-                # "int_range": r,
-            })
+def fermi_dirac(e, fd_params: Fd_Params):
+    """array -> array"""
+    res = 1.0 / (np.exp((e - fd_params.energy) / fd_params.sigma) + 1.0)
     
-    return crop_ldd
+    assert isinstance(fd_params.mirror, bool)
+    
+    if fd_params.mirror:
+        return 1.0 - res
+    else:
+        return res
+    
+def create_weights(xs, fd1: Fd_Params, fd2: Fd_Params):
+    assert np.all(xs[:-1] <= xs[1:])    # make sure that the energies is in acsending order
+    
+    boundary = (fd1.energy + fd2.energy) / 2.0
+    
+    condition = (xs < boundary)
+    _energies = np.extract(condition, xs)
+    weights1 = fermi_dirac(_energies, fd_params=fd1)
+    
+    condition = (xs >= boundary)
+    _energies = np.extract(condition, xs)
+    weights2 = fermi_dirac(_energies, fd_params=fd2)
+
+    weights = np.concatenate((weights1, weights2))
+    
+    return weights
+
+def compute_lderr(atan_logders, lmax):
+    """
+    We having this function to process the atan logder in advance since we 
+    don't want to store lots of data in the file repository.
+    
+    Using four values to construct the fermi-dirac functions for weight the function.
+    Four values are hard coded.
+    """
+    fd1 = Fd_Params._make([0.0, 0.25, True])
+    fd2 = Fd_Params._make([6.0, 0.25, False])
+
+    # hard code unbound weight compare to bound state
+    weight_unbound = 0.1
+    
+    lderr = 0.0
+    for l in atan_logders.ae:        
+        # diff with counting the weight on fermi dirac distribution
+        f1, f2 = atan_logders.ae[l], atan_logders.ps[l]
+                
+        sortind = np.argsort(f1.energies) # must do the sort since we use concatenate to combine split range
+        energies = f1.energies[sortind]
+        
+        abs_diff = np.abs(f1.values - f2.values)    # compare the absolute diff
+        abs_diff = abs_diff[sortind]
+        
+        weights = create_weights(energies, fd1, fd2)  # !do not sort since it require enegies sorted in acsend order
+        
+        integ = cumtrapz(abs_diff * weights, x=energies) / (energies[-1] - energies[0]) # normalized cumulated integ
+        integ_final = integ[-1]
+        
+        if not l < lmax+1:
+            # unbound states
+            integ_final *= weight_unbound
+            
+        lderr += integ_final
+    
+    return lderr
 
 class OncvPseudoParser(Parser):
     """Parser for `OncvPseudoCalculation` parse output to pseudo and verifi results"""
@@ -79,11 +95,13 @@ class OncvPseudoParser(Parser):
             fp.write(stdout.encode('utf-8'))
             fpath = fp.name
             abi_parser = OncvParser(fpath)
+            
+            # abi_parser.scan()
+            # lderr = compute_lderr(abi_parser.atan_logders, abi_parser.lmax)
             try:
                 abi_parser.scan()
                 
-                # crop_ldd is a dictionary for the ldd of every crop section
-                crop_ldd = compute_crop_l1err(abi_parser.atan_logders, abi_parser.lmax)
+                lderr = compute_lderr(abi_parser.atan_logders, abi_parser.lmax)
             except:
                 # not finish okay therefore not parsed
                 # TODO re-check the following exit states, will be override by this one
@@ -102,7 +120,7 @@ class OncvPseudoParser(Parser):
             results = abi_parser.get_results()
         
         output_parameters = {}
-        output_parameters['crop_ldd'] = crop_ldd
+        output_parameters['ldderr'] = lderr
         output_parameters['max_atan_logder_l1err'] = float(results['max_atan_logder_l1err'])
         output_parameters['max_ecut'] = float(results['max_ecut'])
         

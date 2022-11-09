@@ -3,38 +3,14 @@ from aiida import orm
 from aiida.engine import ToContext
 from aiida_opsp.calcjob import OncvPseudoCalculation
 
-def penalty(crop_ldd=None, max_ecut=None, state_err_avg=None):
-    if crop_ldd is None:
-        return abs(9999)
+def penalty(ldderr=999.0, max_ecut=99.0, state_err_avg=None):
+    # pre-process of ecut since it is in the 
+    # range around 10 Ha >> range of ldderr ~ 0.5 Ha for diff
+    max_ecut *= 0.001
+    
+    weight_max_ecut = 0.5
 
-    # set range for crop intg (-inf, -5) (-5, -2) (-2, 0) (0, 2) (2, 6), (6, 8) (8, inf)
-    crop_weight_dict = {
-        "ninf_n5": 0, 
-        "n5_n2": 0.5, 
-        "n2_0": 0.5, 
-        "0_2": 2.5, 
-        "2_6": 4,
-        "6_8": 1, 
-        "8_inf": 0.5,
-    }
-    
-    state_type_weight_dict = {
-        "bound": 1,
-        "unbound": 0.2,
-    }
-    
-    res_cost = 0.
-    for ldd in crop_ldd:
-        integ = ldd["integ"]
-        st_w = state_type_weight_dict.get(ldd["state_type"])
-        cw_w = crop_weight_dict.get(ldd["crop_range"])
-        res_cost += integ * st_w * cw_w
-    
-    # an example of penalty function TBD
-
-    # TODO: state_err_avg
-    
-    res_cost += max_ecut * 0.2
+    res_cost = max_ecut * weight_max_ecut + ldderr * 1.0
     
     # Search function need use min for best results error, the smaller the better so close to 0 is best
     return res_cost
@@ -94,7 +70,7 @@ class OncvPseudoBaseWorkChain(WorkChain):
         d = dict(workchain.outputs.output_parameters)
         
         inputs = {
-            "crop_ldd": d.get("crop_ldd", None),
+            "ldderr": d.get("ldderr", 999.0),
             "max_ecut": d.get("max_ecut", 99),
             "state_err_avg": d.get("state_err_avg", 99),
         }
