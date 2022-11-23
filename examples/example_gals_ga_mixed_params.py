@@ -8,7 +8,7 @@ from aiida_opsp.workflows.psp_oncv import OncvPseudoBaseWorkChain
 def run():
     code = orm.load_code('oncv4@localhost')
 
-    conf_name = orm.Str('Li-low')
+    conf_name = orm.Str('Ga')
     angular_momentum_settings = orm.Dict(
         dict={
             's': {
@@ -20,6 +20,14 @@ def run():
                 # 'debl': 2.0,
             },
             'p': {
+                # 'rc': 2.2,
+                # 'qcut': 7.0,
+                # 'ncon': 3,
+                # 'nbas': 7,
+                'nproj': 2,
+                # 'debl': 3.5,
+            }, 
+            'd': {
                 # 'rc': 2.2,
                 # 'qcut': 7.0,
                 # 'ncon': 3,
@@ -56,7 +64,7 @@ def run():
             'gene_mutate_mediocrity_probability': 0.4,
             'seed': 979,
             'local_search_base_parameters': {
-                'max_iter': 2,
+                'max_iter': 10,
                 'xtol': 1e-1,
                 'ftol': 1e-1,
             }
@@ -117,7 +125,7 @@ def run():
                 'space': {
                     'refto': 'rc(5)',
                     'low': 0, 
-                    'high': 2.0,
+                    'high': 2.5,
                 },
                 'local_optimize': True,
             },
@@ -157,6 +165,53 @@ def run():
                     'high': 5.0,
                 },
                 'local_optimize': True,
+            },
+            'd_rc': {
+                'key_name': 'angular_momentum_settings:d.rc',
+                'type': 'float',
+                'space': {
+                    'refto': 'rc(5)',
+                    'low': 0, 
+                    'high': 2.5,
+                },
+                'local_optimize': True,
+            }, 
+            'd_qcut': {
+                'key_name': 'angular_momentum_settings:d.qcut',
+                'type': 'float',
+                'space': {
+                    'low': 4.0, 
+                    'high': 10.0,
+                },
+                'local_optimize': True,
+            },
+            'd_ncon': {
+                'key_name': 'angular_momentum_settings:d.ncon',
+                'type': 'int',
+                'space': {
+                    'low': 3, 
+                    'high': 5,
+                },
+                'local_optimize': False,
+            },
+            'd_nbas': {
+                'key_name': 'angular_momentum_settings:d.nbas',
+                'type': 'int',
+                'space': {
+                    'refto': 'd_ncon',
+                    'low': 3, 
+                    'high': 5,
+                },
+                # 'local_optimize': False,
+            },
+            'd_debl': {
+                'key_name': 'angular_momentum_settings:d.debl',
+                'type': 'float',
+                'space': {
+                    'low': 0, 
+                    'high': 5.0,
+                },
+                'local_optimize': True,
             },       
             'lpopt': {
                 'key_name': 'local_potential_settings:lpopt',
@@ -190,7 +245,7 @@ def run():
         'fixture_inputs': {
             'code': code,
             'conf_name': conf_name,
-            'lmax': orm.Int(1),
+            'lmax': orm.Int(2),
             'angular_momentum_settings': angular_momentum_settings,
             'local_potential_settings': local_potential_settings,
             'nlcc_settings': nlcc_settings,

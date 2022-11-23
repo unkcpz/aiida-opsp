@@ -70,7 +70,11 @@ class GeneticAlgorithmWorkChain(WorkChain):
         spec.input_namespace('fixture_inputs', required=False, dynamic=True)  # The fixed input parameters that will combined with change parameters
         
         spec.outline(
-            cls.start,  # prepare init population and parameters
+            cls.init_setup,
+            while_(cls.not_warmup)(
+                cls.start_and_warmup,  # prepare init population and parameters
+                cls.warmup_parser,
+            ),
             while_(cls.not_finished)(
                 cls.launch_evaluation,    # calc fitness of current generation
                 cls.get_results,
@@ -80,9 +84,8 @@ class GeneticAlgorithmWorkChain(WorkChain):
                 cls.combine_pop,
             ),
             # finalize run
-            cls.launch_evaluation,
-            cls.get_results,
-            cls.combine_pop,
+            cls.launch_final_evaluation,
+            cls.get_final_results,
             cls.finalize,   # stop iteration and get results
         )
         spec.output('result', valid_type=orm.Dict)
@@ -101,14 +104,14 @@ class GeneticAlgorithmWorkChain(WorkChain):
     def indices_to_retrieve(self, value):
         self.ctx.indices_to_retrieve = value
         
-    def _init_population(self, num_pop, genes, seed):
+    def _init_population(self, num_population, genes, seed):
         """return populations of one generation as a numpy array"""
         random.seed(f'init_pop_{seed}')
         
         # set an unassigned array
-        pop = np.empty([num_pop, len(genes)], dtype=float)
+        pop = np.empty([num_population, len(genes)], dtype=float)
 
-        for i in range(num_pop):
+        for i in range(num_population):
             _inds = {}
             for k, v in genes.items():
                 # the first for to collect all not related range setting for base.
@@ -154,20 +157,26 @@ class GeneticAlgorithmWorkChain(WorkChain):
         """
         return self._EVAL_PREFIX + str(index)
     
+    def init_setup(self):
+        """prepare initial ctx"""
         
-    def start(self):
         # to store const parameters in ctx over GA procedure
         parameters = self.ctx.const_parameters = self.inputs.parameters.get_dict()
         
-        self.ctx.current_generation = 1
+        # current warmup session
+        self.ctx.current_warmup_session = 0
+        
+        # init current optimize session aka generation in GA
+        self.ctx.current_optimize_session = 0
         
         # population
-        seed = self.ctx.seed = parameters['seed']
-        num_pop = parameters['num_pop_per_generation']
-        genes = self.ctx.genes = self.inputs.vars_info.get_dict()
-        # built-in dict class gained the ability to remember 
-        # insertion order (this new behavior became guaranteed in Python 3.7).
-        self.ctx.population = self._init_population(num_pop, genes, seed=seed)
+        self.ctx.seed = parameters['seed']
+        self.ctx.num_population = parameters['num_pop_per_generation']
+        self.ctx.genes = self.inputs.vars_info.get_dict()
+        self.ctx.num_elitism = parameters['num_elitism']
+        self.ctx.num_mating_parents = parameters['num_mating_parents']
+
+        self.ctx.population = np.array([], dtype=np.float64).reshape(0, len(self.ctx.genes))
         
         # initialize the ctx variable to update during GA
         self.ctx.fitness = None
@@ -175,9 +184,74 @@ class GeneticAlgorithmWorkChain(WorkChain):
         # solution
         self.ctx.best_solution = None
     
+    def not_warmup(self):
+        """check if the number of valid population is enough"""
+        if len(self.ctx.population) < self.ctx.num_population:
+            return True
+        else:
+            # trim of population to setted number should be done in the loop process
+            assert len(self.ctx.population) == self.ctx.num_population
+            return False
+    
+        
+    def start_and_warmup(self):
+        """run on a very large amount of candidate to
+        getting start-up entities."""
+        
+        evaluate_process = load_object(self.inputs.evaluate_process.value)
+        
+        # submit evaluation for the pop ind
+        # I need more than the number of population per generation
+        # since the guess inputs easily lead to failing calculations.
+        seed = self.ctx.seed + self.ctx.current_warmup_session
+        population = self._init_population(self.ctx.num_population, self.ctx.genes, seed=seed)
+        evals = {}
+        for idx, indv in enumerate(population):
+            inputs = self._indv_to_inputs(indv)
+            node = self.submit(evaluate_process, **inputs)
+            node.base.extras.set('indv_data', list(indv))   # store original indv data
+            evals[self.eval_key(idx)] = node
+            self.indices_to_retrieve.append(idx)
+
+        return self.to_context(**evals)
+    
+    def warmup_parser(self):
+        """parse warmup run and set population"""
+        self.report('Checking warmup evaluations.')
+        outputs = {}
+    
+        while self.indices_to_retrieve:
+            idx = self.indices_to_retrieve.pop(0)
+            key = self.eval_key(idx)
+            self.report('Retrieving output for evaluation {}'.format(idx))
+            eval_proc = self.ctx[key]
+            if not eval_proc.is_finished_ok:
+                # When evaluate process failed it can be
+                # - the parameters are not proper, this should result the bad score for the GA input
+                # - the evalute process failed for resoure reason, should raise and reported.
+                # - TODO: Test configuration 0 is get but no other configuration results -> check what output look like
+                if eval_proc.exit_status == 201: # ERROR_PSPOT_HAS_NODE
+                    outputs[idx] = (math.inf, eval_proc.base.extras.all['indv_data'])
+                else:
+                    return self.exit_codes.ERROR_EVALUATE_PROCESS_FAILED
+            else:
+                outputs[idx] = (eval_proc.outputs['result'].value, eval_proc.base.extras.all['indv_data'])
+            
+        sorted_dict = {k: v for k, v in sorted(outputs.items(), key=lambda item: item[1][0])}
+        lst = [i[1] for i in sorted_dict.values() if not math.isinf(i[0])]
+        sorted_outputs = np.array(lst, dtype=np.float64).reshape(len(lst), len(self.ctx.genes))
+        self.ctx.population = np.vstack((self.ctx.population, sorted_outputs))
+        
+        # trim number of population to setted value
+        if len(self.ctx.population) > self.ctx.num_population:
+            self.ctx.population = self.ctx.population[:self.ctx.num_population,:]
+        
+        # bump warmup session idx
+        self.ctx.current_warmup_session += 1
+            
     def not_finished(self):
         """return a bool, whether create new generation"""
-        if self.ctx.current_generation > self.ctx.const_parameters['num_generation']:
+        if self.ctx.current_optimize_session > self.ctx.const_parameters['num_generation']:
             return False
         else:
             return True
@@ -213,7 +287,22 @@ class GeneticAlgorithmWorkChain(WorkChain):
             vind.append(x)
             
         return vind
-                
+
+    def _indv_to_inputs(self, indv):
+        """
+        giving indv of population return input
+        """
+        # submit evaluation for the pop ind
+        input_mapping = [i["key_name"] for i in self.inputs.vars_info.get_dict().values()]
+
+        vind = self._validate_ind(indv, self.ctx.genes)
+        inputs = self._merge_nested_inputs(
+            input_mapping=input_mapping, 
+            input_values=list(vind), 
+            fixture_inputs=self.inputs.get('fixture_inputs', {})
+        )
+            
+        return inputs
         
     def launch_evaluation(self):
         """
@@ -223,25 +312,24 @@ class GeneticAlgorithmWorkChain(WorkChain):
             
         evaluate_process is the name of process
         """
-        self.report(f'On fitness at generation: {self.ctx.current_generation}')
+        self.report(f'On fitness at generation: {self.ctx.current_optimize_session}')
+        print("!!!!!!", len(self.ctx.population))
 
         evaluate_process = load_object(self.inputs.evaluate_process.value)
         
         # submit evaluation for the pop ind
         evals = {}
-        input_mapping = [i["key_name"] for i in self.inputs.vars_info.get_dict().values()]
-        for idx, ind in enumerate(self.ctx.population):
-            vind = self._validate_ind(ind, self.ctx.genes)
-            inputs = self._merge_nested_inputs(
-                input_mapping=input_mapping, 
-                input_values=list(vind), 
-                fixture_inputs=self.inputs.get('fixture_inputs', {})
-            )
+        for idx, indv in enumerate(self.ctx.population):
+            inputs = self._indv_to_inputs(indv)
             node = self.submit(evaluate_process, **inputs)
             evals[self.eval_key(idx)] = node
             self.indices_to_retrieve.append(idx)
             
         return self.to_context(**evals)
+    
+    def launch_final_evaluation(self):
+        self.report("I am final")
+        self.launch_evaluation()
 
     def get_results(self):
         """-> fitness parser, calc best solution"""
@@ -281,6 +369,10 @@ class GeneticAlgorithmWorkChain(WorkChain):
         self.report(f'\n{output_report_str}')
         self.report(self.ctx.best_solution)
         
+    def get_final_results(self):
+        self.report("I am final")
+        self.get_results()
+        
     def _get_best_solution(self, outputs):
         import operator
         
@@ -300,23 +392,23 @@ class GeneticAlgorithmWorkChain(WorkChain):
         
     def crossover(self):
         """crossover"""
-        self.ctx.current_generation += 1    # IMPORTANT, otherwise infinity loop
+        self.ctx.current_optimize_session += 1    # IMPORTANT, otherwise infinity loop
         self.ctx.seed += 1 # IMPORTANT the seed should update for every generation otherwise mutate offspring is the same
         
         # keep and mating parents selection
         self.ctx.elitism, mating_parents = _rank_selection(
             self.ctx.population, 
             self.ctx.fitness, 
-            self.ctx.const_parameters['num_elitism'],
-            self.ctx.const_parameters['num_mating_parents'],
+            self.ctx.num_elitism,
+            self.ctx.num_mating_parents,
         )
         
         # EXPERIMENTAL!!
         # N_offspring = N_pop - 2 * N_elitism
-        # sinec mutate using gaussing for the other N_elitism
+        # since mutate using gaussing for the other N_elitism
         
         # crossover
-        num_offsprings = self.ctx.const_parameters['num_pop_per_generation'] - 2 * self.ctx.const_parameters['num_elitism']
+        num_offsprings = self.ctx.num_population - 2 * self.ctx.num_elitism
         self.ctx.offspring = _crossover(mating_parents, num_offsprings, seed=self.ctx.seed)
         
         
@@ -366,7 +458,8 @@ class GeneticAlgorithmWorkChain(WorkChain):
     def combine_pop(self):
         local_min_elitism_lst = []
         local_min_elitism_y_list = []
-        for child in self.ctx.workchain_elitism:
+        for _ in range(self.ctx.num_elitism):
+            child = self.ctx.workchain_elitism.pop()
             if not child.is_finished_ok:
                 self.logger.warning(
                     f"Local search not finished ok",
@@ -376,11 +469,16 @@ class GeneticAlgorithmWorkChain(WorkChain):
             local_min_elitism_lst.append(child.outputs.result['xs'])
             local_min_elitism_y_list.append(child.outputs.result['y'])
             
+        # make sure workchain_eltism ctx is empty
+        assert len(self.ctx.workchain_elitism) == 0
+            
         self.ctx.local_min_elitism = np.array(local_min_elitism_lst)
         self.ctx.local_min_elitism_y = local_min_elitism_y_list
             
         # TODO check the local_search workchains are finished.
         # self.ctx.population = np.vstack((self.ctx.local_min_elitism, self.ctx.local_min_mut_elitism, self.ctx.local_min_mut_offspring))
+        
+        print("@@@number to comb", len(self.ctx.local_min_elitism), len(self.ctx.mut_elitism), len(self.ctx.mut_offspring))
         self.ctx.population = np.vstack((self.ctx.local_min_elitism, self.ctx.mut_elitism, self.ctx.mut_offspring))
     
     def finalize(self):
@@ -392,7 +490,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
         self.out('result', orm.Dict(dict={
                 "populations": list(self.ctx.local_min_elitism), 
                 "fitness": self.ctx.local_min_elitism_y,
-                'current_generation': self.ctx.current_generation,
+                'current_generation': self.ctx.current_optimize_session,
             }).store())
         
 def _rank_selection(population, fitness, num_elitism, num_mating_parents):
@@ -407,12 +505,13 @@ def _rank_selection(population, fitness, num_elitism, num_mating_parents):
     fitness_sorted = sorted(range(len(fitness)), key=lambda k: fitness[k])
     # Selecting the best individuals in the current generation as parents for producing the offspring of the next generation.
 
-    keep_parents = np.empty((num_elitism, population.shape[1]), dtype=object)
+    print("HERERRR:", num_elitism, population.shape[1])
+    keep_parents = np.empty((num_elitism, population.shape[1]), dtype=np.float64)
     for i in range(num_elitism):
         # set i-th best ind to i row
         keep_parents[i, :] = population[fitness_sorted[i], :].copy()
         
-    mating_parents = np.empty((num_mating_parents, population.shape[1]), dtype=object)
+    mating_parents = np.empty((num_mating_parents, population.shape[1]), dtype=np.float64)
     for i in range(num_mating_parents):
         # set i-th best ind to i row
         mating_parents[i, :] = population[fitness_sorted[i], :].copy()
@@ -427,7 +526,7 @@ def _crossover(parents, num_offsprings, seed):
     random.seed(f'crossover_{seed}')
     
     num_parents, num_genes = parents.shape
-    offspring = np.empty((num_offsprings, num_genes), dtype=object)
+    offspring = np.empty((num_offsprings, num_genes), dtype=np.float64)
     for i in range(num_offsprings):
         m_idx, f_idx = random.sample(range(num_parents), 2)
         mother = parents[m_idx] # mother from mother idx
@@ -454,7 +553,7 @@ def _mutate(inds, individual_mutate_probability, gene_mutate_probability, genes,
         return inds
     
     num_inds, num_genes = inds.shape    
-    mut_inds = np.empty([num_inds, num_genes], dtype=float)
+    mut_inds = np.empty([num_inds, num_genes], dtype=np.float64)
     for i in range(num_inds):
         _d_ind = {}
         for j, (k, v) in enumerate(genes.items()):

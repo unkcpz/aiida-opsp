@@ -292,8 +292,8 @@ class LocalSearchWorkChain(WorkChain):
         self.ctx.fun_simplex = np.take(self.ctx.fun_simplex, idx, axis=0)
         self.ctx.simplex = np.take(self.ctx.simplex, idx, axis=0)
         
-        self.report(f"simplex is {self.ctx.simplex}")
-        self.report(f"fun_simplex is {self.ctx.fun_simplex}")
+        # self.report(f"simplex is {self.ctx.simplex}")
+        # self.report(f"fun_simplex is {self.ctx.fun_simplex}")
         
         # check finished
         x_dist_max = np.max(la.norm(self.ctx.simplex[1:] - self.ctx.simplex[0], axis=-1))
@@ -465,7 +465,7 @@ class LocalSearchWorkChain(WorkChain):
         
 
     def finalize_inspect(self):
-        self.report(f'on stop: simplex is {self.ctx.simplex}, fun_simplex is {self.ctx.fun_simplex}')
+        # self.report(f'on stop: simplex is {self.ctx.simplex}, fun_simplex is {self.ctx.fun_simplex}')
         xs = self._restore_ind(
             simplex=list(self.ctx.simplex[0, :]), 
             vars_info=self.inputs.vars_info.get_dict(), 
