@@ -18,8 +18,8 @@ angular_momentum_settings = orm.Dict(
         'p': {
             'rc': 1.75,
             'qcut': 5.8,
-            'ncon': 5,
-            'nbas': 9,
+            'ncon': 4,
+            'nbas': 8,
             'nproj': 2,
             'debl': 3.0,
         }, 
@@ -48,6 +48,7 @@ nlcc_settings = orm.Dict(
         'rcfact': 1.4,
     }
 )
+
 
 def run():
     inputs = {

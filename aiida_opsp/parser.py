@@ -56,8 +56,8 @@ def compute_lderr(atan_logders, lmax):
     # hard code unbound weight compare to bound state
     weight_unbound = 0.1
     
-    lderr = 0.0
-    for l in atan_logders.ae:        
+    ldderr = 0.0
+    for l in atan_logders.ae:
         # diff with counting the weight on fermi dirac distribution
         f1, f2 = atan_logders.ae[l], atan_logders.ps[l]
                 
@@ -76,9 +76,9 @@ def compute_lderr(atan_logders, lmax):
             # unbound states
             integ_final *= weight_unbound
             
-        lderr += integ_final
+        ldderr += integ_final
     
-    return lderr
+    return ldderr
 
 class OncvPseudoParser(Parser):
     """Parser for `OncvPseudoCalculation` parse output to pseudo and verifi results"""
