@@ -37,10 +37,10 @@ class Rosenbrock(WorkChain):
         spec.output('result')
         
         spec.outline(
-            cls.run,
+            cls._run,
         )
         
-    def run(self):
+    def _run(self):
         x, y = self.inputs.x.value, self.inputs.y.value
         self.out('result', orm.Float((1 - x) ** 2 + 100 * (y - x**2) ** 2).store())
         
