@@ -42,7 +42,7 @@ def create_weights(xs, fd1: Fd_Params, fd2: Fd_Params):
     
     return weights
 
-def compute_lderr(atan_logders, lmax):
+def compute_lderr(atan_logders, lmax, weight_unbound=0.1):
     """
     We having this function to process the atan logder in advance since we 
     don't want to store lots of data in the file repository.
@@ -53,9 +53,6 @@ def compute_lderr(atan_logders, lmax):
     fd1 = Fd_Params._make([0.0, 0.25, True])
     fd2 = Fd_Params._make([6.0, 0.25, False])
 
-    # hard code unbound weight compare to bound state
-    weight_unbound = 0.1
-    
     ldderr = 0.0
     for l in atan_logders.ae:
         # diff with counting the weight on fermi dirac distribution
@@ -96,8 +93,6 @@ class OncvPseudoParser(Parser):
             fpath = fp.name
             abi_parser = OncvParser(fpath)
             
-            # abi_parser.scan()
-            # lderr = compute_lderr(abi_parser.atan_logders, abi_parser.lmax)
             try:
                 abi_parser.scan()
                 
@@ -123,6 +118,7 @@ class OncvPseudoParser(Parser):
         output_parameters['ldderr'] = lderr
         output_parameters['max_atan_logder_l1err'] = float(results['max_atan_logder_l1err'])
         output_parameters['max_ecut'] = float(results['max_ecut'])
+        output_parameters['weight_unbound'] = self.node.inputs.weight_unbound.value
         
         # Separate the input string into separate lines
         data_lines = stdout.split('\n') 
