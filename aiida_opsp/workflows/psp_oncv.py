@@ -3,14 +3,12 @@ from aiida import orm
 from aiida.engine import ToContext
 from aiida_opsp.calcjob import OncvPseudoCalculation
 
-def penalty(ldderr=999.0, max_ecut=99.0, state_err_avg=None):
+def penalty(ldderr=999.0, max_ecut=99.0, weight_ecut=0.1, state_err_avg=None):
     # pre-process of ecut since it is in the 
     # range ~ 50 Ha >> range of ldderr ~ 0.5 Ha for diff
     max_ecut *= 0.01
     
-    weight_max_ecut = 0.1
-
-    res_cost = max_ecut * weight_max_ecut + ldderr * 1.0
+    res_cost = max_ecut * weight_ecut + ldderr * 1.0
     
     # Search function need use min for best results error, the smaller the better so close to 0 is best
     return res_cost
@@ -26,6 +24,7 @@ class OncvPseudoBaseWorkChain(WorkChain):
 
         spec.expose_inputs(OncvPseudoCalculation, exclude=['metadata'])
         spec.expose_outputs(OncvPseudoCalculation)
+        spec.input('weight_ecut', valid_type=orm.Float, default=lambda: orm.Float(0.1))
         spec.output('result', valid_type=orm.Float)
 
         spec.outline(
@@ -72,6 +71,7 @@ class OncvPseudoBaseWorkChain(WorkChain):
         inputs = {
             "ldderr": d.get("ldderr", 999.0),
             "max_ecut": d.get("max_ecut", 99),
+            "weight_ecut": self.inputs.weight_ecut.value,
             "state_err_avg": d.get("state_err_avg", 99),
         }
         

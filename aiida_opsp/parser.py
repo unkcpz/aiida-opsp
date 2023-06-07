@@ -96,7 +96,7 @@ class OncvPseudoParser(Parser):
             try:
                 abi_parser.scan()
                 
-                lderr = compute_lderr(abi_parser.atan_logders, abi_parser.lmax)
+                lderr = compute_lderr(abi_parser.atan_logders, abi_parser.lmax, self.node.inputs.weight_unbound.value)
             except:
                 # not finish okay therefore not parsed
                 # TODO re-check the following exit states, will be override by this one

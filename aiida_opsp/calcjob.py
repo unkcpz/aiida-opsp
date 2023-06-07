@@ -28,7 +28,7 @@ class OncvPseudoCalculation(CalcJob):
         spec.input('nlcc_settings', valid_type=orm.Dict) 
         spec.input('run_atomic_test', valid_type=orm.Bool)
         spec.input('dump_psp', valid_type=orm.Bool)
-        spec.input('weight_unbound', valid_type=orm.Float, default=orm.Float(0.1))
+        spec.input('weight_unbound', valid_type=orm.Float, default=lambda: orm.Float(0.1))
 
         spec.output('output_parameters', valid_type=orm.Dict)
         spec.output('output_pseudo', valid_type=UpfData, required=False)
