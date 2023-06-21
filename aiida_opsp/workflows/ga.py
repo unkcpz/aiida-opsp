@@ -556,46 +556,60 @@ def _mutate(inds, individual_mutate_probability, gene_mutate_probability, genes,
     mut_inds = np.empty([num_inds, num_genes], dtype=np.float64)
     for i in range(num_inds):
         _d_ind = {}
+
+        # get all genes items key is the name of gene parameter e.g. rc(5)
         for j, (k, v) in enumerate(genes.items()):
             _d_ind[k] = inds[i][j]
-        
+            
         for j, (k, v) in enumerate(genes.items()):
+            old_value = inds[i, j]
             space = v['space']
             gene_type = v['type']
-            # based of probability, keep original value if not being hit
-            # TODO: if not fully random but a pertubation may better??
-            if random.random() < gene_mutate_probability:
-                if gaussian:
-                    old_value = inds[i, j]
-                    x = random.gauss(old_value, sigma=old_value/10)
-                    
-                    if gene_type == 'int':
-                        x = int(round(x))
-                    else:
-                        x = round(x, 4)
-
-                    _d_ind[k] = x    
-                else:
-                    refto = space.get("refto", None)
-                    if refto:
-                        base = _d_ind[refto]
-                        x = base + random.uniform(space['low'], space['high'])
-                    else:
-                        x = random.uniform(space['low'], space['high'])
-                        
-                    if gene_type == 'int':
-                        x = int(round(x))
-                    else:
-                        x = round(x, 4)
-
-                    _d_ind[k] = x    
+            # based on the probability, keep original value if not being hit
+            refto_param = space.get("refto", None) # change from 0.0 as base
+            if refto_param:
+                base = _d_ind[refto_param]
             else:
-                mut_inds[i, j] = inds[i, j]
+                base = 0.0
+            if random.random() < gene_mutate_probability:
+
+                if gaussian:
+                    x = random.gauss(old_value, sigma=old_value/10)
+                else:
+                    x = random.uniform(space['low'], space['high'])
+                    
+                # Get the new mutated value
+                new_value = x + base
                 
-        # Set pop
-        for j, key in enumerate(genes.keys()):
-            mut_inds[i, j] = _d_ind[key]                
+                if gene_type == 'int':
+                    new_value = int(round(new_value))
+                else:
+                    new_value = round(new_value, 4)
+                    
+                # when gaussian applied to int type gene, it may not change because of rounding
+                # we force to change it by +1 or -1
+                if new_value == old_value:
+                    # if it is lower bound, add 1
+                    if new_value == space['low']:
+                        new_value += 1
+                    # if it is upper bound, minus 1
+                    elif new_value == space['high']:
+                        new_value -= 1
+                    # otherwise, random +1 or -1
+                    else:
+                        new_value += random.choice([-1, 1])
+
+                # Set the mutated gene value
+                _d_ind[k] = new_value
+                     
+            else:
+                # Set the gene value to original value
+                _d_ind[k] = old_value
+
             
+        # Set the individual's chromosome
+        mut_inds[i, :] = list(_d_ind.values())
+                
     return mut_inds
 
 def _merge_nested_keys(nested_key_inputs, target_inputs):
