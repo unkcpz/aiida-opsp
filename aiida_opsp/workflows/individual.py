@@ -3,6 +3,7 @@ from aiida.engine import WorkChain, while_, ToContext
 from aiida import orm
 
 from aiida_opsp.workflows import load_object, PROCESS_INPUT_KWARGS
+from aiida_opsp.utils.merge_input import individual_to_inputs
 
 
 class GenerateValidIndividual(WorkChain):
@@ -24,6 +25,9 @@ class GenerateValidIndividual(WorkChain):
             ),
             cls.finalize,
         )
+        spec.output('final_individual', valid_type=orm.Dict)
+
+        spec.exit_code(201, 'ERROR_INVALID_INDIVIDUAL', message='The individual is invalid.')
 
     def setup(self):
         """Setup inputs"""
@@ -56,7 +60,7 @@ class GenerateValidIndividual(WorkChain):
         evaluate_process = load_object(self.inputs.evaluate_process.value)
 
         # submit evaluation process for the individual
-        inputs = self._individual_to_inputs(self.ctx.individual)
+        inputs = individual_to_inputs(self.ctx.individual, self.inputs.variable_info.get_dict(), self.inputs.fixture_inputs)
         process = self.submit(evaluate_process, **inputs)
         # at most did MAX_ITERATION
         self.ctx.count += 1
@@ -73,7 +77,7 @@ class GenerateValidIndividual(WorkChain):
 
     def finalize(self):
         if "final_individual" in self.ctx:
-            self.out("final_individual", self.ctx.final_individual)
+            self.out("final_individual", orm.Dict(dict=self.ctx.final_individual).store())
         else:
             return self.exit_codes.ERROR_CANNOT_GENERATE_VALID_INDIVIDUAL
 
@@ -127,7 +131,7 @@ def generate_random_individual(variable_info, seed=None):
                 individual[key] = round(var, 4) + ref_to_val
             else:
                 raise ValueError("Unknown variable type")
-                
+
     return individual
 
 def validate_individual(individual, variable_info):
