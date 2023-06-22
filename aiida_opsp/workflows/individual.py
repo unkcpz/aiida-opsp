@@ -1,3 +1,4 @@
+import random
 from aiida.engine import WorkChain, while_, ToContext
 from aiida import orm
 
@@ -10,10 +11,8 @@ class GenerateValidIndividual(WorkChain):
     def define(cls, spec):
         super().define(spec)
 
-        spec.input('parameters', valid_type=orm.Dict)
         spec.input('evaluate_process', **PROCESS_INPUT_KWARGS)
         spec.input('variable_info', valid_type=orm.Dict)
-        spec.input('result_key', valid_type=orm.Str)
         spec.input_namespace('fixture_inputs', required=False, dynamic=True)
         
         spec.outline(
@@ -48,7 +47,7 @@ class GenerateValidIndividual(WorkChain):
                 self.ctx.final_individual = self.ctx.individual
                 self.ctx.should_continue = False        
         
-        self.ctx.individual = _random_individual()
+        self.ctx.individual = generate_random_individual(self.inputs.variable_info.get_dict())
 
     def evaluate(self):
         if not self.ctx.should_continue:
@@ -77,3 +76,84 @@ class GenerateValidIndividual(WorkChain):
             self.out("final_individual", self.ctx.final_individual)
         else:
             return self.exit_codes.ERROR_CANNOT_GENERATE_VALID_INDIVIDUAL
+
+def generate_random_individual(variable_info, seed=None):
+    """Generate a random individual"""
+    random.seed(seed)
+    individual = dict()
+
+    # iterate over the variable_info to set variables that are not dependent on others
+    for key, info in variable_info.items():
+        var_range = info["space"]["range"]
+        var_type = info["var_type"]
+        
+        ref_to_key = info["space"].get("ref_to", None)
+        if ref_to_key is not None:
+            continue
+        else:
+            if var_type == "int":
+                # randint is inclusive
+                individual[key] = random.randint(var_range[0], var_range[1])
+            elif var_type == "float":
+                # uniform is inclusive
+                var = random.uniform(var_range[0], var_range[1])
+                individual[key] = round(var, 4)
+            else:
+                raise ValueError("Unknown variable type")
+
+    # iterate over the variable_info to set variables that are dependent on others
+    for key, info in variable_info.items():
+        var_range = info["space"]["range"]
+        var_type = info["var_type"]
+        
+        ref_to_key = info["space"].get("ref_to", None)
+
+        if ref_to_key is None:
+            continue
+        else:
+            # get the base value that the current variable depends on
+            ref_to_val = individual[ref_to_key]
+
+            # only support refer to the same type
+            assert isinstance(ref_to_val, eval(var_type))
+            
+            if var_type == "int":
+                # randint is inclusive
+                individual[key] = random.randint(var_range[0], var_range[1])
+                individual[key] += ref_to_val
+            elif var_type == "float":
+                # uniform is inclusive
+                var = random.uniform(var_range[0], var_range[1])
+                individual[key] = round(var, 4) + ref_to_val
+            else:
+                raise ValueError("Unknown variable type")
+                
+    return individual
+
+def validate_individual(individual, variable_info):
+    """Validate the individual"""
+    for key, info in variable_info.items():
+        var_range = info["space"]["range"]
+        ref_to = info["space"].get("ref_to", None)
+        var_type = info["var_type"]
+        
+        value = individual[key]
+        
+        if ref_to is not None:
+            ref_to_val = individual[ref_to]
+            var_range = [var_range[0] + ref_to_val, var_range[1] + ref_to_val]
+        
+        if var_type == "int":
+            if not isinstance(value, int):
+                raise ValueError(f"The variable type is {type(value)} not int")
+            if not var_range[0] <= value <= var_range[1]:
+                raise ValueError(f"The variable value {value} is not in the range")
+        elif var_type == "float":
+            if not isinstance(value, float):
+                raise ValueError(f"The variable type is {type(value)} not float")
+            if not var_range[0] <= value <= var_range[1]:
+                raise ValueError(f"The variable value {value} is not in the range")
+        else:
+            raise ValueError("Unknown variable type")
+    
+    return True
