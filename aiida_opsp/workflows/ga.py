@@ -582,6 +582,11 @@ def _mutate(inds, individual_mutate_probability, gene_mutate_probability, genes,
                 base = 0.0
             if random.random() < gene_mutate_probability:
 
+                if gaussian and gene_type == 'int':
+                    # when gaussian set, which means run mutation for elitism only mutate continous gene.
+                    _d_ind[k] = old_value
+                    continue
+
                 if gaussian:
                     x = random.gauss(old_value, sigma=old_value/10)
                 else:
