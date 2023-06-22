@@ -441,7 +441,16 @@ class GeneticAlgorithmWorkChain(WorkChain):
     def local_search(self):
         """ local_search of elitism
         """
-        for ind in self.ctx.elitism:
+        # TODO: very tricky, find a better way to do this
+        # Now for the first generation, run the local search for unmutated elitism
+        # for the rest of generation, run the local search for mutated elitism
+        self.report(f'current_optimize_session: {self.ctx.current_optimize_session}')
+        if self.ctx.current_optimize_session == 1:
+            to_mutated_elitism = self.ctx.elitism
+        else:
+            to_mutated_elitism = self.ctx.mut_elitism
+            
+        for ind in to_mutated_elitism:
             ls_parameters = self.ctx.const_parameters['local_search_base_parameters']
             ls_parameters['init_vars'] = list(ind)
             
