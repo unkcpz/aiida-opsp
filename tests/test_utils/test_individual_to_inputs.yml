@@ -1,0 +1,5 @@
+a:
+  c: 4.5
+inner_a:
+  extra_param: 1.5
+  inner_b: 1.0
