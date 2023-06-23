@@ -5,8 +5,7 @@ from aiida import orm
 from aiida_opsp.workflows import load_object, PROCESS_INPUT_KWARGS
 from aiida_opsp.utils.merge_input import individual_to_inputs
 
-
-class GenerateValidIndividual(WorkChain):
+class _MixinGenerateValidIndividual(WorkChain):
     
     @classmethod
     def define(cls, spec):
@@ -45,6 +44,47 @@ class GenerateValidIndividual(WorkChain):
             return False
 
         return self.ctx.should_continue
+
+    def generate(self):
+        """The generate step need to be implemented in the subclass"""
+        raise NotImplementedError("Please implement the generate method in the subclass")
+
+    def evaluate(self):
+        if not self.ctx.should_continue:
+            return None
+
+        evaluate_process = load_object(self.inputs.evaluate_process.value)
+
+        # submit evaluation process for the individual
+        inputs = individual_to_inputs(self.ctx.individual, self.inputs.variable_info.get_dict(), self.inputs.fixture_inputs)
+        process = self.submit(evaluate_process, **inputs)
+        # at most did MAX_ITERATION
+        self.ctx.count += 1
+
+        # update the seed to generate new input
+        self.ctx.seed += self.ctx.count
+        
+        return ToContext(evaluate=process)
+    
+    def inspect(self):
+        # check if the continue needed
+        process = self.ctx.evaluate
+        
+        if process.is_finished_ok:
+            self.ctx.final_individual = self.ctx.individual
+            self.ctx.should_continue = False
+
+    def finalize(self):
+        if "final_individual" in self.ctx:
+            self.out("final_individual", orm.Dict(dict=self.ctx.final_individual).store())
+        else:
+            return self.exit_codes.ERROR_CANNOT_GENERATE_VALID_INDIVIDUAL 
+
+class GenerateRandomValidIndividual(_MixinGenerateValidIndividual):
+    
+    @classmethod
+    def define(cls, spec):
+        super().define(spec)
 
     def generate(self):
         # before generate and continue, check if the previous run is okay
@@ -58,79 +98,21 @@ class GenerateValidIndividual(WorkChain):
         
         self.ctx.individual = generate_random_individual(self.inputs.variable_info.get_dict(), self.ctx.seed)
 
-    def evaluate(self):
-        if not self.ctx.should_continue:
-            return None
-
-        evaluate_process = load_object(self.inputs.evaluate_process.value)
-
-        # submit evaluation process for the individual
-        inputs = individual_to_inputs(self.ctx.individual, self.inputs.variable_info.get_dict(), self.inputs.fixture_inputs)
-        process = self.submit(evaluate_process, **inputs)
-        # at most did MAX_ITERATION
-        self.ctx.count += 1
-
-        # update the seed to generate new input
-        self.ctx.seed += self.ctx.count
-        
-        return ToContext(evaluate=process)
-    
-    def inspect(self):
-        # check if the continue needed
-        process = self.ctx.evaluate
-        
-        if process.is_finished_ok:
-            self.ctx.final_individual = self.ctx.individual
-            self.ctx.should_continue = False
-
-    def finalize(self):
-        if "final_individual" in self.ctx:
-            self.out("final_individual", orm.Dict(dict=self.ctx.final_individual).store())
-        else:
-            return self.exit_codes.ERROR_CANNOT_GENERATE_VALID_INDIVIDUAL
-
-class GenerateMutateValidIndividual(WorkChain):
+class GenerateMutateValidIndividual(_MixinGenerateValidIndividual):
 
     @classmethod
     def define(cls, spec):
         super().define(spec)
 
-        spec.input('evaluate_process', **PROCESS_INPUT_KWARGS)
-        spec.input('variable_info', valid_type=orm.Dict)
-        spec.input_namespace('fixture_inputs', required=False, dynamic=True)
-        
         spec.input('init_individual', valid_type=orm.Dict)
         spec.input('probability', valid_type=orm.Float, default=lambda: orm.Float(0.5))
-        spec.input('seed', valid_type=orm.Int, default=lambda: orm.Int(2022))
         
-        spec.outline(
-            cls.setup,
-            while_(cls.should_continue)(
-                cls.generate,
-                cls.evaluate,
-                cls.inspect,
-            ),
-            cls.finalize,
-        )
-        spec.output('final_individual', valid_type=orm.Dict)
-
-        spec.exit_code(201, 'ERROR_INVALID_INDIVIDUAL', message='The individual is invalid.')
-
     def setup(self):
         """Setup inputs"""
-        self.ctx.count = 0
-        self.ctx.should_continue = True
+        super().setup()
 
-        # the seed need to be update upon the iter number, otherwise will always give the same result
-        self.ctx.seed = self.inputs.seed.value
+        # set the probability
         self.ctx.probability = self.inputs.probability.value
-
-    def should_continue(self):
-        if not self.ctx.count < 10:
-            self.report("reach the maximum iteration")
-            return False
-
-        return self.ctx.should_continue
 
     def generate(self):
         # before generate and continue, check if the previous run is okay
@@ -143,37 +125,6 @@ class GenerateMutateValidIndividual(WorkChain):
                 self.ctx.should_continue = False        
         
         self.ctx.individual = generate_mutate_individual(self.inputs.init_individual.get_dict(), self.ctx.probability, self.inputs.variable_info.get_dict(), self.ctx.seed)
-
-    def evaluate(self):
-        if not self.ctx.should_continue:
-            return None
-
-        evaluate_process = load_object(self.inputs.evaluate_process.value)
-
-        # submit evaluation process for the individual
-        inputs = individual_to_inputs(self.ctx.individual, self.inputs.variable_info.get_dict(), self.inputs.fixture_inputs)
-        process = self.submit(evaluate_process, **inputs)
-        # at most did MAX_ITERATION
-        self.ctx.count += 1
-
-        # update the seed to generate new input
-        self.ctx.seed += self.ctx.count
-        
-        return ToContext(evaluate=process)
-    
-    def inspect(self):
-        # check if the continue needed
-        process = self.ctx.evaluate
-        
-        if process.is_finished_ok:
-            self.ctx.final_individual = self.ctx.individual
-            self.ctx.should_continue = False
-
-    def finalize(self):
-        if "final_individual" in self.ctx:
-            self.out("final_individual", orm.Dict(dict=self.ctx.final_individual).store())
-        else:
-            return self.exit_codes.ERROR_CANNOT_GENERATE_VALID_INDIVIDUAL
 
 def hash_dict(d: dict):
     import hashlib

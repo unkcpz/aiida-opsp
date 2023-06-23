@@ -11,7 +11,7 @@ from aiida.orm.nodes.data.base import to_aiida_type
 
 from aiida_opsp.workflows.ls import LocalSearchWorkChain
 from aiida_opsp.workflows import load_object, PROCESS_INPUT_KWARGS
-from aiida_opsp.workflows.individual import GenerateValidIndividual
+from aiida_opsp.workflows.individual import GenerateRandomValidIndividual
 from aiida_opsp.utils.merge_input import individual_to_inputs
 
 class GeneticAlgorithmWorkChain(WorkChain):
@@ -105,7 +105,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
         for idx in range(self.ctx.num_population):
             new_seed = self.ctx.seed + idx  # increment the seed, since we don't want every individual is the same ;)
             inputs['seed'] = orm.Int(new_seed)
-            node = self.submit(GenerateValidIndividual, **inputs)
+            node = self.submit(GenerateRandomValidIndividual, **inputs)
 
             retrive_key = f'_VALID_IND_{idx}'
             evaluates[retrive_key] = node

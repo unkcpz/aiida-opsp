@@ -2,7 +2,7 @@ from aiida import orm
 from aiida.engine import run_get_node
 
 from aiida_opsp.workflows.psp_oncv import OncvPseudoBaseWorkChain
-from aiida_opsp.workflows.individual import GenerateValidIndividual, GenerateMutateValidIndividual
+from aiida_opsp.workflows.individual import GenerateRandomValidIndividual, GenerateMutateValidIndividual
 
 conf_name = orm.Str('Li-low')
 angular_momentum_settings = orm.Dict(
@@ -157,7 +157,7 @@ def run():
         }
     }
 
-    _, node = run_get_node(GenerateValidIndividual, **inputs)
+    _, node = run_get_node(GenerateRandomValidIndividual, **inputs)
     
     individual = node.outputs.final_individual
     print(individual.get_dict())
