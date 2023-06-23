@@ -16,6 +16,8 @@ class GenerateValidIndividual(WorkChain):
         spec.input('variable_info', valid_type=orm.Dict)
         spec.input_namespace('fixture_inputs', required=False, dynamic=True)
         
+        spec.input('seed', valid_type=orm.Int, default=lambda: orm.Int(2022))
+        
         spec.outline(
             cls.setup,
             while_(cls.should_continue)(
@@ -34,6 +36,9 @@ class GenerateValidIndividual(WorkChain):
         self.ctx.count = 0
         self.ctx.should_continue = True
 
+        # the seed need to be update upon the iter number, otherwise will always give the same result
+        self.ctx.seed = self.inputs.seed.value
+
     def should_continue(self):
         if not self.ctx.count < 10:
             self.report("reach the maximum iteration")
@@ -51,7 +56,7 @@ class GenerateValidIndividual(WorkChain):
                 self.ctx.final_individual = self.ctx.individual
                 self.ctx.should_continue = False        
         
-        self.ctx.individual = generate_random_individual(self.inputs.variable_info.get_dict())
+        self.ctx.individual = generate_random_individual(self.inputs.variable_info.get_dict(), self.ctx.seed)
 
     def evaluate(self):
         if not self.ctx.should_continue:
@@ -64,6 +69,9 @@ class GenerateValidIndividual(WorkChain):
         process = self.submit(evaluate_process, **inputs)
         # at most did MAX_ITERATION
         self.ctx.count += 1
+
+        # update the seed to generate new input
+        self.ctx.seed += self.ctx.count
         
         return ToContext(evaluate=process)
     
