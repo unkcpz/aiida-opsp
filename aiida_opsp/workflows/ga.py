@@ -11,7 +11,7 @@ from aiida.orm.nodes.data.base import to_aiida_type
 
 from aiida_opsp.workflows.ls import LocalSearchWorkChain
 from aiida_opsp.workflows import load_object, PROCESS_INPUT_KWARGS
-from aiida_opsp.workflows.individual import GenerateRandomValidIndividual
+from aiida_opsp.workflows.individual import GenerateRandomValidIndividual, GenerateMutateValidIndividual
 from aiida_opsp.utils.merge_input import individual_to_inputs
 
 class GeneticAlgorithmWorkChain(WorkChain):
@@ -35,10 +35,12 @@ class GeneticAlgorithmWorkChain(WorkChain):
             while_(cls.should_continue)(
                 cls.evaluation_run,    # calc fitness of current generation
                 cls.evaluation_inspect,
+                cls.ranking,
                 # cls.crossover,
-                cls.mutate,
-                cls.local_search,
-                cls.combine_pop,
+                cls.mutate_run,
+                cls.mutate_inspect,
+                # cls.local_search,
+                cls.combine_population,
             ),
             # finalize run
             cls.launch_final_evaluation,
@@ -73,10 +75,10 @@ class GeneticAlgorithmWorkChain(WorkChain):
         
         # population
         self.ctx.seed = parameters['seed']
-        self.ctx.num_population = parameters['num_pop_per_generation']
+        self.ctx.num_population = parameters['num_population']
         self.ctx.genes = self.inputs.vars_info.get_dict()
-        self.ctx.num_elitism = parameters['num_elitism']
-        self.ctx.num_mating_parents = parameters['num_mating_parents']
+        self.ctx.num_elite_members = parameters['num_elite_members']
+        self.ctx.num_mating_parents = parameters['num_mating_individuals']
 
         self.ctx.population = np.array([], dtype=np.float64).reshape(0, len(self.ctx.genes))
         
@@ -211,48 +213,98 @@ class GeneticAlgorithmWorkChain(WorkChain):
         # self.report(f'\n{output_report_str}')
         # self.report(self.ctx.best_solution)
         
-    def get_final_results(self):
-        self.report("I am final")
-        self.get_results()
+    # def get_final_results(self):
+    #     self.report("I am final")
+    #     self.get_results()
+    #     
+    # def _get_best_solution(self, outputs):
+    #     import operator
+    #     
+    #     # get the max value and idx of fitness
+    #     idx, best_fitness =  min(outputs.items(), key=operator.itemgetter(1))
+    #     key = self.eval_key(idx)
+    #     eval_proc = self.ctx[key]
+    #     process_uuid = eval_proc.id
+    #     best_ind = self.ctx.population[idx]
+    #     
+    #     # TODO store more than one best solutions
+    #     return {
+    #         'best_fitness': best_fitness,
+    #         'process_uuid': process_uuid,
+    #         'best_ind': best_ind,
+    #     }
+    def ranking(self):
+        pass
         
-    def _get_best_solution(self, outputs):
-        import operator
+    # def crossover(self):
+    #     """crossover"""
+    #     self.ctx.current_optimize_session += 1    # IMPORTANT, otherwise infinity loop
+    #     self.ctx.seed += 1 # IMPORTANT the seed should update for every generation otherwise mutate offspring is the same
+    #     
+    #     # keep and mating parents selection
+    #     self.ctx.elitism, mating_parents = _rank_selection(
+    #         self.ctx.population, 
+    #         self.ctx.fitness, 
+    #         self.ctx.num_elitism,
+    #         self.ctx.num_mating_parents,
+    #     )
+    #     
+    #     # EXPERIMENTAL!!
+    #     # N_offspring = N_pop - 2 * N_elitism
+    #     # since mutate using gaussing for the other N_elitism
+    #     
+    #     # crossover
+    #     num_offsprings = self.ctx.num_population - 2 * self.ctx.num_elitism
+    #     self.ctx.offspring = _crossover(mating_parents, num_offsprings, seed=self.ctx.seed)
         
-        # get the max value and idx of fitness
-        idx, best_fitness =  min(outputs.items(), key=operator.itemgetter(1))
-        key = self.eval_key(idx)
-        eval_proc = self.ctx[key]
-        process_uuid = eval_proc.id
-        best_ind = self.ctx.population[idx]
-        
-        # TODO store more than one best solutions
-        return {
-            'best_fitness': best_fitness,
-            'process_uuid': process_uuid,
-            'best_ind': best_ind,
+
+    def mutate_run(self):
+        inputs = {
+            'evaluate_process': self.ctx.evaluate_process,
+            'variable_info': self.inputs.variable_info,
+            'fixture_inputs': self.inputs.fixture_inputs,
         }
         
-    def crossover(self):
-        """crossover"""
-        self.ctx.current_optimize_session += 1    # IMPORTANT, otherwise infinity loop
-        self.ctx.seed += 1 # IMPORTANT the seed should update for every generation otherwise mutate offspring is the same
+        evaluates = dict()
+
+        # mutation elitism
+        for idx, elite_member in enumerate(self.ctx.elite_members):
+            new_seed = self.ctx.seed + idx  # increment the seed, since we don't want every individual is the same ;)
+            inputs['seed'] = orm.Int(new_seed)
+            inputs['init_individual'] = elite_member
+            inputs['probability'] = self.ctx.const_parameters['elite_member_mutate_probability']
+
+            node = self.submit(GenerateMutateValidIndividual, **inputs)
+
+            retrive_key = f'_VALID_MUTATE_ELITE_{idx}'
+            evaluates[retrive_key] = node
+
+            self.ctx.tmp_retrive_key_storage.append(retrive_key)
+
+        for idx, mediocrity_member in enumerate(self.ctx.num_mediocrity_members):
+            new_seed = self.ctx.seed + idx  # increment the seed, since we don't want every individual is the same ;)
+            inputs['seed'] = orm.Int(new_seed)
+            inputs['init_individual'] = mediocrity_member
+            inputs['probability'] = self.ctx.const_parameters['mediocrity_member_mutate_probability']
+            
+            node = self.submit(GenerateMutateValidIndividual, **inputs)
+            
+            retrive_key = f'_VALID_MUTATE_MEDIOCRITY_{idx}'
+            evaluates[retrive_key] = node
+            
+            self.ctx.tmp_retrive_key_storage.append(retrive_key)
+
+        return self.to_context(**evaluates)
+
+    def mutate_inspect(self):
+        self.ctx.mutate_elite_members = []
+        self.ctx.mutate_mediocrity_members = []
+
+        # DO SOMETHING WITH THE RESULTS
         
-        # keep and mating parents selection
-        self.ctx.elitism, mating_parents = _rank_selection(
-            self.ctx.population, 
-            self.ctx.fitness, 
-            self.ctx.num_elitism,
-            self.ctx.num_mating_parents,
-        )
-        
-        # EXPERIMENTAL!!
-        # N_offspring = N_pop - 2 * N_elitism
-        # since mutate using gaussing for the other N_elitism
-        
-        # crossover
-        num_offsprings = self.ctx.num_population - 2 * self.ctx.num_elitism
-        self.ctx.offspring = _crossover(mating_parents, num_offsprings, seed=self.ctx.seed)
-        
+    def combine_population(self):
+        """combine population"""
+        self.ctx.population = self.ctx.elite_members + self.ctx.mutate_elite_members + self.ctx.mutate_mediocrity_members
         
     def mutate(self):
         """breed new generation"""
