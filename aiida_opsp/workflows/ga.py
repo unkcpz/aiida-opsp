@@ -11,11 +11,11 @@ from aiida.orm.nodes.data.base import to_aiida_type
 
 from aiida_opsp.workflows.ls import LocalSearchWorkChain
 from aiida_opsp.workflows import load_object, PROCESS_INPUT_KWARGS
+from aiida_opsp.workflows.individual import GenerateValidIndividual
+from aiida_opsp.utils.merge_input import individual_to_inputs
 
 class GeneticAlgorithmWorkChain(WorkChain):
     """WorkChain to run GA """
-    
-    _EVAL_PREFIX = 'eval_'
     
     @classmethod
     def define(cls, spec):
@@ -30,11 +30,12 @@ class GeneticAlgorithmWorkChain(WorkChain):
         
         spec.outline(
             cls.init_setup,
-            cls.prepare_init_population,
-            while_(cls.not_finished)(
-                cls.launch_evaluation,    # calc fitness of current generation
-                cls.get_results,
-                cls.crossover,
+            cls.prepare_init_population_run,
+            cls.prepare_init_population_inspect,
+            while_(cls.should_continue)(
+                cls.evaluation_run,    # calc fitness of current generation
+                cls.evaluation_inspect,
+                # cls.crossover,
                 cls.mutate,
                 cls.local_search,
                 cls.combine_pop,
@@ -61,70 +62,14 @@ class GeneticAlgorithmWorkChain(WorkChain):
         self.ctx.indices_to_retrieve = value
         
 
-    def _init_population(self, num_population, genes, seed):
-        """return populations of one generation as a numpy array"""
-        random.seed(f'init_pop_{seed}')
-        
-        # set an unassigned array
-        pop = np.empty([num_population, len(genes)], dtype=float)
-
-        for i in range(num_population):
-            _inds = {}
-            for k, v in genes.items():
-                # the first for to collect all not related range setting for base.
-                space = v['space']
-                gene_type = v['type']
-                
-                refto = space.get("refto", None)
-                if refto is None:
-                    x = random.uniform(space['low'], space['high'])
-
-                    if gene_type == 'int':
-                        x = int(round(x))
-                    else:
-                        x = round(x, 4)
-
-                    _inds[k] = x                
-                
-            for k, v in genes.items():
-                # the second for to set the relavent range from base
-                space = v['space']
-                gene_type = v['type']
-                refto = space.get("refto", None)
-                if refto is not None:
-                    base = _inds[refto]
-                    x = base + random.uniform(space['low'], space['high'])
-                    
-                    if gene_type == 'int':
-                        x = int(round(x))
-                    else:
-                        x = round(x, 4)
-
-                    _inds[k] = x  
-                
-            # Set pop
-            for j, key in enumerate(genes.keys()):
-                pop[i][j] = _inds[key]
-                
-        return pop
-    
-    def eval_key(self, index):
-        """
-        Returns the evaluation key corresponding to a given index.
-        """
-        return self._EVAL_PREFIX + str(index)
-    
     def init_setup(self):
         """prepare initial ctx"""
         
         # to store const parameters in ctx over GA procedure
         parameters = self.ctx.const_parameters = self.inputs.parameters.get_dict()
         
-        # current warmup session
-        self.ctx.current_warmup_session = 0
-        
         # init current optimize session aka generation in GA
-        self.ctx.current_optimize_session = 0
+        self.ctx.current_generation = 0
         
         # population
         self.ctx.seed = parameters['seed']
@@ -138,133 +83,64 @@ class GeneticAlgorithmWorkChain(WorkChain):
         # initialize the ctx variable to update during GA
         self.ctx.fitness = None
         
+        # set base evaluate process
+        self.ctx.evaluate_process = load_object(self.inputs.evaluate_process.value)
+
+        # tmp_retrive_key_storage
+        # This is for store the key so the parser step know which process to fetch from ctx
+        # It needs to be kept empty in between a run-inspect session.
+        self.ctx.tmp_retrive_key_storage = []
+        
         # solution
         self.ctx.best_solution = None
     
-    def prepare_init_population(self):
-        pass
+    def prepare_init_population_run(self):
+        inputs = {
+            'evaluate_process': self.ctx.evaluate_process,
+            'variable_info': self.inputs.variable_info,
+            'fixture_inputs': self.inputs.fixture_inputs,
+        }
 
-    def not_warmup(self):
-        """check if the number of valid population is enough"""
-        if len(self.ctx.population) < self.ctx.num_population:
-            return True
-        else:
-            # trim of population to setted number should be done in the loop process
-            assert len(self.ctx.population) == self.ctx.num_population
-            return False
-    
-        
-    def start_and_warmup(self):
-        """run on a very large amount of candidate to
-        getting start-up entities."""
-        
-        evaluate_process = load_object(self.inputs.evaluate_process.value)
-        
-        # submit evaluation for the pop ind
-        # I need more than the number of population per generation
-        # since the guess inputs easily lead to failing calculations.
-        seed = self.ctx.seed + self.ctx.current_warmup_session
-        population = self._init_population(self.ctx.num_population, self.ctx.genes, seed=seed)
-        evals = {}
-        for idx, indv in enumerate(population):
-            inputs = self._indv_to_inputs(indv)
-            node = self.submit(evaluate_process, **inputs)
-            node.base.extras.set('indv_data', list(indv))   # store original indv data
-            evals[self.eval_key(idx)] = node
-            self.indices_to_retrieve.append(idx)
+        evaluates = dict()
+        for idx in range(self.ctx.num_population):
+            new_seed = self.ctx.seed + idx  # increment the seed, since we don't want every individual is the same ;)
+            inputs['seed'] = orm.Int(new_seed)
+            node = self.submit(GenerateValidIndividual, **inputs)
 
-        return self.to_context(**evals)
-    
-    def warmup_parser(self):
-        """parse warmup run and set population"""
-        self.report('Checking warmup evaluations.')
-        outputs = {}
-    
-        while self.indices_to_retrieve:
-            idx = self.indices_to_retrieve.pop(0)
-            key = self.eval_key(idx)
-            self.report('Retrieving output for evaluation {}'.format(idx))
-            eval_proc = self.ctx[key]
-            if not eval_proc.is_finished_ok:
-                # When evaluate process failed it can be
-                # - the parameters are not proper, this should result the bad score for the GA input
-                # - the evalute process failed for resoure reason, should raise and reported.
-                # - TODO: Test configuration 0 is get but no other configuration results -> check what output look like
-                if eval_proc.exit_status == 201: # ERROR_PSPOT_HAS_NODE
-                    outputs[idx] = (math.inf, eval_proc.base.extras.all['indv_data'])
-                else:
-                    return self.exit_codes.ERROR_EVALUATE_PROCESS_FAILED
+            retrive_key = f'_VALID_IND_{idx}'
+            evaluates[retrive_key] = node
+
+            self.ctx.tmp_retrive_key_storage.append(retrive_key)
+
+
+        return self.to_context(**evaluates)
+
+    def prepare_init_population_inspect(self):
+        population = []
+        while len(self.ctx.tmp_retrive_key_storage) > 0:
+            key = self.ctx.tmp_retrive_key_storage.pop(0)
+            self.report(f"Retriving output for evaluation {key}")
+
+            proc: orm.WorkChainNode = self.ctx[key]
+            if not proc.is_finished_okay:
+                return self.exit_codes.ERROR_PREPARE_INIT_POPULATION_FAILED
             else:
-                outputs[idx] = (eval_proc.outputs['result'].value, eval_proc.base.extras.all['indv_data'])
+                population.append(proc.outputs.final_individual.get_dict())          
+
+        self.ctx.population = population
+
+        if not len(self.ctx.population) == self.ctx.num_population:
+            return self.exit_codes.ERROR_PREPARE_INIT_POPULATION_FAILED            
             
-        sorted_dict = {k: v for k, v in sorted(outputs.items(), key=lambda item: item[1][0])}
-        lst = [i[1] for i in sorted_dict.values() if not math.isinf(i[0])]
-        sorted_outputs = np.array(lst, dtype=np.float64).reshape(len(lst), len(self.ctx.genes))
-        self.ctx.population = np.vstack((self.ctx.population, sorted_outputs))
         
-        # trim number of population to setted value
-        if len(self.ctx.population) > self.ctx.num_population:
-            self.ctx.population = self.ctx.population[:self.ctx.num_population,:]
-        
-        # bump warmup session idx
-        self.ctx.current_warmup_session += 1
-            
-    def not_finished(self):
+    def should_continue(self):
         """return a bool, whether create new generation"""
-        if self.ctx.current_optimize_session > self.ctx.const_parameters['num_generation']:
+        if self.ctx.current_generation > self.ctx.const_parameters['num_generation']:
             return False
         else:
             return True
         
-    def _merge_nested_inputs(self, input_mapping, input_values, fixture_inputs):
-        """list of mapping key and value"""
-        target_inputs = dict(fixture_inputs)
-        
-        nested_key_inputs = {}
-        for key, value in zip(input_mapping, input_values):
-            # nest key separated by `.`
-            nested_key_inputs[key] = value
-            
-        inputs = _merge_nested_keys(nested_key_inputs, target_inputs)
-            
-        return inputs
-            
-    def _validate_ind(self, ind, genes):
-        """validate and convert the ind to the correct type"""
-        vind = []
-        for i, (k, v) in enumerate(genes.items()):
-            x = ind[i]
-            if v["space"].get("refto", None) is None:
-                if x < v["space"]["low"] or x > v["space"]["high"]:
-                    self.report(f"!!!WARNING: gene {k} = {x} is out of range {v['space']['low']} < x < {v['space']['high']}.")
-            # else:
-            # TODO: add contruct _inds dict function and check the range of it.
-                
-                
-            if v["type"] == "int":
-                x = int(x)
-                
-            vind.append(x)
-            
-        return vind
-
-    def _indv_to_inputs(self, indv):
-        """
-        giving indv of population return input
-        """
-        # submit evaluation for the pop ind
-        input_mapping = [i["key_name"] for i in self.inputs.vars_info.get_dict().values()]
-
-        vind = self._validate_ind(indv, self.ctx.genes)
-        inputs = self._merge_nested_inputs(
-            input_mapping=input_mapping, 
-            input_values=list(vind), 
-            fixture_inputs=self.inputs.get('fixture_inputs', {})
-        )
-            
-        return inputs
-        
-    def launch_evaluation(self):
+    def evaluation_run(self):
         """
         Calculating the fitness values of all solutions in the current population. 
         It returns:
@@ -272,62 +148,68 @@ class GeneticAlgorithmWorkChain(WorkChain):
             
         evaluate_process is the name of process
         """
-        self.report(f'On fitness at generation: {self.ctx.current_optimize_session}')
-        print("!!!!!!", len(self.ctx.population))
+        self.report(f'On fitness at generation: {self.ctx.current_generation}')
 
-        evaluate_process = load_object(self.inputs.evaluate_process.value)
-        
-        # submit evaluation for the pop ind
-        evals = {}
-        for idx, indv in enumerate(self.ctx.population):
-            inputs = self._indv_to_inputs(indv)
-            node = self.submit(evaluate_process, **inputs)
-            evals[self.eval_key(idx)] = node
-            self.indices_to_retrieve.append(idx)
+        # submit evaluation for the individuals of a population
+        evaluates = dict()
+        for idx, individual in enumerate(self.ctx.population):
+            inputs = individual_to_inputs(individual, self.inputs.variable_info.get_dict(), self.inputs.fixture_inputs)
+            node = self.submit(self.ctx.evaluate_process, **inputs)
+
+            retrive_key = f'_EVAL_IND_{idx}'
+            evaluates[retrive_key] = node
+            self.ctx.tmp_retrive_key_storage.append(retrive_key)
             
-        return self.to_context(**evals)
+        return self.to_context(**evaluates)
     
     def launch_final_evaluation(self):
         self.report("I am final")
         self.launch_evaluation()
 
-    def get_results(self):
+    def evaluation_inspect(self):
         """-> fitness parser, calc best solution"""
         self.report('Checking finished evaluations.')
-        outputs = {}
+
+        # dict of retrive key and score of the individual
+        fitness = {}
     
-        while self.indices_to_retrieve:
-            idx = self.indices_to_retrieve.pop(0)
-            key = self.eval_key(idx)
-            self.report('Retrieving output for evaluation {}'.format(idx))
-            eval_proc = self.ctx[key]
-            if not eval_proc.is_finished_ok:
+        while len(self.ctx.tmp_retrive_key_storage) > 0:
+            key = self.ctx.tmp_retrive_key_storage.pop(0)
+
+            self.report(f'Retrieving output for evaluation {key}')
+
+            proc: orm.WorkChainNode = self.ctx[key]
+            if not proc.is_finished_ok:
                 # When evaluate process failed it can be
                 # - the parameters are not proper, this should result the bad score for the GA input
                 # - the evalute process failed for resoure reason, should raise and reported.
                 # - TODO: Test configuration 0 is get but no other configuration results -> check what output look like
-                if eval_proc.exit_status == 201: # ERROR_PSPOT_HAS_NODE
-                    outputs[idx] = math.inf
+                if proc.exit_status == 201: # ERROR_PSPOT_HAS_NODE
+                    fitness[key] = math.inf
                 else:
                     return self.exit_codes.ERROR_EVALUATE_PROCESS_FAILED
             else:
-                outputs[idx] = eval_proc.outputs['result'].value
+                fitness[key] = proc.outputs['result'].value
             
-        self.ctx.fitness = outputs
-        self.ctx.best_solution = self._get_best_solution(outputs)
+        # fitness store the results of individual score of a population of this generation
+        self.ctx.fitness = fitness
+        if len(self.ctx.fitness) != self.ctx.num_generation:
+            return self.exit_codes.ERROR_FITNESS_HAS_WRONG_NUM_OF_RESULTS
+
+        # self.ctx.best_solution = self._get_solutions(fitness, [0])[0]
         
-        output_report = []
-        for idx, ind in enumerate(self.ctx.population):
-            key = self.eval_key(idx)
-            proc = self.ctx[key]
-            fitness = outputs[idx]
-            output_report.append(f'idx={idx}  pk={proc.pk}: {ind} -> fitness={fitness}')
-            
-        output_report_str = '\n'.join(output_report)
+        # output_report = []
+        # for idx, ind in enumerate(self.ctx.population):
+        #     key = self.eval_key(idx)
+        #     proc = self.ctx[key]
+        #     fitness = outputs[idx]
+        #     output_report.append(f'idx={idx}  pk={proc.pk}: {ind} -> fitness={fitness}')
+        #     
+        # output_report_str = '\n'.join(output_report)
         
-        self.report(f'population and process pk:')
-        self.report(f'\n{output_report_str}')
-        self.report(self.ctx.best_solution)
+        # self.report(f'population and process pk:')
+        # self.report(f'\n{output_report_str}')
+        # self.report(self.ctx.best_solution)
         
     def get_final_results(self):
         self.report("I am final")
