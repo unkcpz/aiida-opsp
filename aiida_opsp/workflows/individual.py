@@ -16,6 +16,7 @@ class _MixinGenerateValidIndividual(WorkChain):
         spec.input_namespace('fixture_inputs', required=False, dynamic=True)
         
         spec.input('seed', valid_type=orm.Int, default=lambda: orm.Int(2022))
+        spec.input('max_iteration', valid_type=orm.Int, default=lambda: orm.Int(20))
         
         spec.outline(
             cls.setup,
@@ -29,6 +30,7 @@ class _MixinGenerateValidIndividual(WorkChain):
         spec.output('final_individual', valid_type=orm.Dict)
 
         spec.exit_code(201, 'ERROR_INVALID_INDIVIDUAL', message='The individual is invalid.')
+        spec.exit_code(202, 'ERROR_CANNOT_GENERATE_VALID_INDIVIDUAL', message='Cannot generate valid individual')
 
     def setup(self):
         """Setup inputs"""
@@ -39,7 +41,7 @@ class _MixinGenerateValidIndividual(WorkChain):
         self.ctx.seed = self.inputs.seed.value
 
     def should_continue(self):
-        if not self.ctx.count < 10:
+        if not self.ctx.count < self.inputs.max_iteration.value:
             self.report("reach the maximum iteration")
             return False
 
