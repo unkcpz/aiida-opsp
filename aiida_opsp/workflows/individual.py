@@ -128,6 +128,27 @@ class GenerateMutateValidIndividual(_MixinGenerateValidIndividual):
         
         self.ctx.individual = generate_mutate_individual(self.inputs.init_individual.get_dict(), self.ctx.probability, self.inputs.variable_info.get_dict(), self.ctx.seed)
 
+class GenerateCrossoverValidIndividual(_MixinGenerateValidIndividual):
+
+    @classmethod
+    def define(cls, spec):
+        super().define(spec)
+
+        spec.input('parent1', valid_type=orm.Dict)
+        spec.input('parent2', valid_type=orm.Dict) 
+        
+    def generate(self):
+        # before generate and continue, check if the previous run is okay
+        # don't do it the first time where the self.ctx.individual is not set
+        if "individual" in self.ctx:
+            process = self.ctx.evaluate
+            
+            if process.is_finished_ok:
+                self.ctx.final_individual = self.ctx.individual
+                self.ctx.should_continue = False        
+        
+        self.ctx.individual = generate_crossover_individual(self.inputs.parent1.get_dict(), self.inputs.parent2.get_dict(), self.inputs.variable_info.get_dict(), self.ctx.seed)
+
 def hash_dict(d: dict):
     import hashlib
     import json
@@ -233,6 +254,38 @@ def generate_random_individual(variable_info, seed=None):
                 raise ValueError("Unknown variable type")
 
     return individual
+
+def generate_crossover_individual(parent1: dict, parent2: dict, variable_info, seed=None):
+    """Generate a offspring individual from two parents"""
+    random.seed(f'{hash_dict(parent1)}_{hash_dict(parent2)}_{seed}')
+    
+    group_mapping = dict()
+    child = dict()
+    for key, info in variable_info.items():
+        g = info.get("group", None)
+        if g is not None:
+            parent_selected = group_mapping.get(g, None)
+            
+            if parent_selected is None:
+                parent_selected = random.choice([-1, 1])
+                group_mapping[g] = parent_selected
+            
+            # select the parent
+            if parent_selected < -1:
+                child[key] = parent1[key]
+            else:
+                child[key] = parent2[key]
+        else:
+            parent_selected = random.choice([-1, 1])
+            
+            if parent_selected < -1:
+                child[key] = parent1[key]
+            else:
+                child[key] = parent2[key]
+
+    return child
+        
+        
 
 def validate_individual(individual, variable_info):
     """Validate the individual"""

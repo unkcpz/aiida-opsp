@@ -36,6 +36,7 @@ variable_info = {
             'ref_to': 'rc(5)',
             'range': [0, 2.0],
         },
+        'group': 's',
         'local_optimize': True,
     },
     's_qcut': {
@@ -44,6 +45,7 @@ variable_info = {
         'space': {
             'range': [4.0, 10.0],
         },
+        'group': 's',
         'local_optimize': True,
     },
     's_ncon': {
@@ -52,6 +54,7 @@ variable_info = {
         'space': {
             'range': [3, 5],
         },
+        'group': 's',
         'local_optimize': False,
     },
     's_nbas': {
@@ -61,6 +64,7 @@ variable_info = {
             'ref_to': 's_ncon',
             'range': [3, 5],
         },
+        'group': 's',
         # 'local_optimize': False,
     },
     's_debl': {
@@ -69,6 +73,7 @@ variable_info = {
         'space': {
             'range': [0, 5.0],
         },
+        'group': 's',
         'local_optimize': True,
     },
     'p_rc': {
@@ -78,6 +83,7 @@ variable_info = {
             'ref_to': 'rc(5)',
             'range': [0, 2.0],
         },
+        'group': 'p',
         'local_optimize': True,
     },
     'p_qcut': {
@@ -86,6 +92,7 @@ variable_info = {
         'space': {
             'range': [4.0, 10.0],
         },
+        'group': 'p',
         'local_optimize': True,
     },
     'p_ncon': {
@@ -94,6 +101,7 @@ variable_info = {
         'space': {
             'range': [3, 5],
         },
+        'group': 'p',
         'local_optimize': False,
     },
     'p_nbas': {
@@ -103,6 +111,7 @@ variable_info = {
             'range': [3, 5],
             'ref_to': 'p_ncon',
         },
+        'group': 'p',
         # 'local_optimize': False,
     },
     'p_debl': {
@@ -111,6 +120,7 @@ variable_info = {
         'space': {
             'range': [0, 5.0],
         },
+        'group': 'p',
         'local_optimize': True,
     },       
     'lpopt': {
@@ -119,6 +129,7 @@ variable_info = {
         'space': {
             'range': [1, 5],
         },
+        'group': 'local',
         'local_optimize': False,
     },
     'rc(5)': {
@@ -127,6 +138,7 @@ variable_info = {
         'space': {
             'range': [0.5, 3.0],
         },
+        'group': 'local',
         'local_optimize': True,
     },       
     'dvloc0': {
@@ -135,6 +147,7 @@ variable_info = {
         'space': {
             'range': [0.0, 3.0],
         },
+        'group': 'local',
         'local_optimize': True,
     },    
 }
@@ -146,10 +159,11 @@ def run():
         'parameters': orm.Dict(dict={
             'seed': 2023,
             'num_generations': 2,
-            'num_individuals': 6,
+            'num_individuals': 10,
             'num_mating_individuals': 4,
             'num_elite_individuals': 2,
             'num_new_individuals': 1,
+            'num_offspring_individuals': 2,
             'elite_individual_mutate_probability': 0.4,
             'mediocre_individual_mutate_probability': 0.8,
             # 'local_search_base_parameters': {

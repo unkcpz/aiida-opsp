@@ -7,7 +7,7 @@ import math
 
 from aiida_opsp.workflows.ls import LocalSearchWorkChain
 from aiida_opsp.workflows import load_object, PROCESS_INPUT_KWARGS
-from aiida_opsp.workflows.individual import GenerateRandomValidIndividual, GenerateMutateValidIndividual
+from aiida_opsp.workflows.individual import GenerateRandomValidIndividual, GenerateMutateValidIndividual, GenerateCrossoverValidIndividual
 from aiida_opsp.utils.merge_input import individual_to_inputs
 
 class GeneticAlgorithmWorkChain(WorkChain):
@@ -36,7 +36,8 @@ class GeneticAlgorithmWorkChain(WorkChain):
                 # ----------------- selection -----------------
                 # the individuals are update in the ctx
                 # when the iteration stop, the step following needs to be skipped
-                # cls.crossover,
+                cls.crossover_run,
+                cls.crossover_inspect,
                 cls.mutate_run,
                 cls.mutate_inspect,
                 cls.new_individuals_run,
@@ -75,8 +76,10 @@ class GeneticAlgorithmWorkChain(WorkChain):
         self.ctx.num_individuals = parameters['num_individuals']
         self.ctx.num_elite_individuals = parameters['num_elite_individuals']
         self.ctx.num_new_individuals = parameters['num_new_individuals']
+        self.ctx.num_offspring_individuals = parameters['num_offspring_individuals']
+        self.ctx.num_mediocre_individuals = self.ctx.num_individuals - 2 * self.ctx.num_elite_individuals - self.ctx.num_new_individuals - self.ctx.num_offspring_individuals
         
-        self.ctx.num_mating_parents = parameters['num_mating_individuals']
+        self.ctx.num_mating_individuals = parameters['num_mating_individuals']
         self.ctx.elite_individual_mutate_probability = parameters['elite_individual_mutate_probability']
         self.ctx.mediocre_individual_mutate_probability = parameters['mediocre_individual_mutate_probability']
 
@@ -205,8 +208,8 @@ class GeneticAlgorithmWorkChain(WorkChain):
             
         # XXX EXPERIMENTAL, not sure if it is good
         # The number of mediocre individuals total - 2 * num_elite_individuals - num_new_individuals
-        number_mediocre_individual = self.ctx.num_individuals - 2 * self.ctx.num_elite_individuals - self.ctx.num_new_individuals
-        for _ in range(number_mediocre_individual):
+        self.ctx.num_mediorce_individuals = self.ctx.num_individuals - 2 * self.ctx.num_elite_individuals - self.ctx.num_new_individuals
+        for _ in range(self.ctx.num_mediorce_individuals):
             self.ctx.mediocre_individuals.append(individuals_in_order.pop(0))
 
     def state_update(self):
@@ -218,28 +221,62 @@ class GeneticAlgorithmWorkChain(WorkChain):
 
         # TODO if the best fitness is not improved for a maximum times, stop the optimization
 
-    # def crossover(self):
-    # TODO: crossover will use the group tag in variable_info to decide which group of variables to crossover
-    #     """crossover"""
-    #     self.ctx.current_optimize_session += 1    # IMPORTANT, otherwise infinity loop
-    #     self.ctx.seed += 1 # IMPORTANT the seed should update for every generation otherwise mutate offspring is the same
-    #     
-    #     # keep and mating parents selection
-    #     self.ctx.elitism, mating_parents = _rank_selection(
-    #         self.ctx.population, 
-    #         self.ctx.fitness, 
-    #         self.ctx.num_elitism,
-    #         self.ctx.num_mating_parents,
-    #     )
-    #     
-    #     # EXPERIMENTAL!!
-    #     # N_offspring = N_pop - 2 * N_elitism
-    #     # since mutate using gaussing for the other N_elitism
-    #     
-    #     # crossover
-    #     num_offsprings = self.ctx.num_individuals - 2 * self.ctx.num_elitism
-    #     self.ctx.offspring = _crossover(mating_parents, num_offsprings, seed=self.ctx.seed)
+    def crossover_run(self):
+        """Use previous half of the population with better fitness to crossover to create new individuals
+        """
+        if not self.ctx.should_continue:
+            return None
+
+        inputs = {
+            'evaluate_process': self.ctx.evaluate_process,
+            'variable_info': self.inputs.variable_info,
+            'fixture_inputs': self.inputs.fixture_inputs,
+        }
         
+        evaluates = dict()
+
+        # use half of the population to crossover
+        mating_pool = self.ctx.population[:self.ctx.num_mating_individuals]
+        self.ctx.offspring_individuals = []
+        
+        for idx in range(self.ctx.num_new_individuals):
+            # set seed for mating parents selection
+            new_seed = self.ctx.seed + idx
+            random.seed(new_seed)
+
+            # select two individuals from the mating pool
+            parent1, parent2 = random.sample(mating_pool, 2)
+
+            inputs['seed'] = orm.Int(new_seed)
+            inputs['parent1'] = orm.Dict(dict=parent1)
+            inputs['parent2'] = orm.Dict(dict=parent2)
+            
+            # crossover the two individuals
+            node = self.submit(GenerateCrossoverValidIndividual, **inputs)
+            
+            retrive_key = f'_CROSSOVER_IND_{idx}'
+            evaluates[retrive_key] = node
+            
+            self.ctx.tmp_retrive_key_storage.append(retrive_key)
+
+        return self.to_context(**evaluates)
+        
+    def crossover_inspect(self):
+        if not self.ctx.should_continue:
+            return None
+        
+        offspring_individuals = list()
+        
+        while len(self.ctx.tmp_retrive_key_storage) > 0:
+            retrive_key = self.ctx.tmp_retrive_key_storage.pop(0)
+            self.report(f'Retrieving output for crossover {retrive_key}')
+            node = self.ctx[retrive_key]
+            if not node.is_finished_ok:
+                return self.exit_codes.ERROR_CROSSOVER_NOT_FINISHED_OK
+            else:
+                offspring_individuals.append(node.outputs['final_individual'].get_dict())
+                
+        self.ctx.offspring_individuals = offspring_individuals
 
     def mutate_run(self):
         if not self.ctx.should_continue:
@@ -319,7 +356,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
         
         evaluates = dict()
         for idx in range(self.ctx.num_new_individuals):
-            new_seed = self.ctx.seed + idx
+            new_seed = self.ctx.seed + idx + self.ctx.current_generation + 42  # increment the seed in a way depend also on the generation, since we don't want every individual is the same ;)
             inputs['seed'] = orm.Int(new_seed)
             node = self.submit(GenerateRandomValidIndividual, **inputs)
             
