@@ -149,6 +149,7 @@ def run():
             'num_individuals': 6,
             'num_mating_individuals': 4,
             'num_elite_individuals': 2,
+            'num_new_individuals': 1,
             'elite_individual_mutate_probability': 0.4,
             'mediocre_individual_mutate_probability': 0.8,
             # 'local_search_base_parameters': {

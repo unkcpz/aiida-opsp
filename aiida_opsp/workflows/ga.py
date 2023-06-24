@@ -39,6 +39,8 @@ class GeneticAlgorithmWorkChain(WorkChain):
                 # cls.crossover,
                 cls.mutate_run,
                 cls.mutate_inspect,
+                cls.new_individuals_run,
+                cls.new_individuals_inspect,
                 cls.combine_population,
                 # cls.local_optimization_run,
                 # cls.local_optimization_inspect,
@@ -53,6 +55,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
         spec.exit_code(202, 'ERROR_EVALUATE_PROCESS_FAILED', message='Failed to evaluate')
         spec.exit_code(203, 'ERROR_FITNESS_HAS_WRONG_NUM_OF_RESULTS', message='Fitness has wrong number of results')
         spec.exit_code(204, 'ERROR_MUTATE_NOT_FINISHED_OK', message='Mutate not finished okay')
+        spec.exit_code(205, 'ERROR_NEW_INDIVIDUALS_NOT_FINISHED_OK', message='New individuals not finished okay')
 
          
     def init_setup(self):
@@ -67,9 +70,12 @@ class GeneticAlgorithmWorkChain(WorkChain):
         self.ctx.should_continue = True
         
         self.ctx.seed = parameters['seed']
+
         self.ctx.num_generations = parameters['num_generations']
         self.ctx.num_individuals = parameters['num_individuals']
         self.ctx.num_elite_individuals = parameters['num_elite_individuals']
+        self.ctx.num_new_individuals = parameters['num_new_individuals']
+        
         self.ctx.num_mating_parents = parameters['num_mating_individuals']
         self.ctx.elite_individual_mutate_probability = parameters['elite_individual_mutate_probability']
         self.ctx.mediocre_individual_mutate_probability = parameters['mediocre_individual_mutate_probability']
@@ -198,8 +204,8 @@ class GeneticAlgorithmWorkChain(WorkChain):
             self.ctx.mutate_elite_individuals.append(individuals_in_order.pop(0))
             
         # XXX EXPERIMENTAL, not sure if it is good
-        # The number of mediocre individuals total - 2 * num_elite_individuals
-        number_mediocre_individual = self.ctx.num_individuals - 2 * self.ctx.num_elite_individuals
+        # The number of mediocre individuals total - 2 * num_elite_individuals - num_new_individuals
+        number_mediocre_individual = self.ctx.num_individuals - 2 * self.ctx.num_elite_individuals - self.ctx.num_new_individuals
         for _ in range(number_mediocre_individual):
             self.ctx.mediocre_individuals.append(individuals_in_order.pop(0))
 
@@ -300,12 +306,53 @@ class GeneticAlgorithmWorkChain(WorkChain):
         self.ctx.mutate_elite_individuals = new_mutate_elite_individuals
         self.ctx.mutate_mediocre_individuals = new_mutate_mediocre_individuals
 
+    def new_individuals_run(self):
+        """Create new individuals to increase the diviersity of the population"""
+        if not self.ctx.should_continue:
+            return None
+        
+        inputs = {
+            'evaluate_process': self.ctx.evaluate_process,
+            'variable_info': self.inputs.variable_info,
+            'fixture_inputs': self.inputs.fixture_inputs,
+        }
+        
+        evaluates = dict()
+        for idx in range(self.ctx.num_new_individuals):
+            new_seed = self.ctx.seed + idx
+            inputs['seed'] = orm.Int(new_seed)
+            node = self.submit(GenerateRandomValidIndividual, **inputs)
+            
+            retrive_key = f'_VALID_NEW_IND_{idx}'
+            evaluates[retrive_key] = node
+            
+            self.ctx.tmp_retrive_key_storage.append(retrive_key)
+            
+        return self.to_context(**evaluates)
+
+    def new_individuals_inspect(self):
+        if not self.ctx.should_continue:
+            return None
+        
+        new_individuals = list()
+        while len(self.ctx.tmp_retrive_key_storage) > 0:
+            retrive_key = self.ctx.tmp_retrive_key_storage.pop(0)
+            self.report(f"Retriving output for evaluation {retrive_key}")
+            node = self.ctx[retrive_key]
+            if not node.is_finished_ok:
+                self.report(f'node {node.pk} is not finished ok')
+                return self.exit_codes.ERROR_NEW_INDIVIDUAL_NOT_FINISHED_OK
+            else:
+                new_individuals.append(node.outputs['final_individual'].get_dict())
+                    
+        self.ctx.new_individuals = new_individuals
+
     def combine_population(self):
         """combine population"""
         if not self.ctx.should_continue:
             return None
 
-        self.ctx.population = self.ctx.elite_individuals + self.ctx.mutate_elite_individuals + self.ctx.mutate_mediocre_individuals
+        self.ctx.population = self.ctx.elite_individuals + self.ctx.mutate_elite_individuals + self.ctx.mutate_mediocre_individuals + self.ctx.new_individuals
 
         
     # def local_search(self):
