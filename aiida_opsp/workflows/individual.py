@@ -4,6 +4,7 @@ from aiida import orm
 
 from aiida_opsp.workflows import load_object, PROCESS_INPUT_KWARGS
 from aiida_opsp.utils.merge_input import individual_to_inputs
+from aiida_opsp.utils import hash_dict
 
 class _MixinGenerateValidIndividual(WorkChain):
     
@@ -149,27 +150,17 @@ class GenerateCrossoverValidIndividual(_MixinGenerateValidIndividual):
         
         self.ctx.individual = generate_crossover_individual(self.inputs.parent1.get_dict(), self.inputs.parent2.get_dict(), self.inputs.variable_info.get_dict(), self.ctx.seed)
 
-def hash_dict(d: dict):
-    import hashlib
-    import json
-
-    # dict to JSON string representation
-    json_str = json.dumps(d, sort_keys=True)
-    
-    # Hash the JSON using SHA-256
-    hash_object = hashlib.sha256(json_str.encode())
-    
-    return hash_object.hexdigest()
-
 def generate_mutate_individual(init_individual: dict, probability: float, variable_info, seed=None):
     """Generate a mutate individual slightly different from given one.
     
     The mutate happened for every gene when the probability hit.
     The seed is the combination of base seed and a int generate from init_individual.
     
-    For the continues parameters (gene), gaussion will be applied, 
+    For the continues parameters (gene), gaussion will be applied, (Note: the sigma is 0.2 hard coded) 
     For the interge parameterrs (gene), jump +/- 1 in the boundary.
     """
+    _SIGMA = 0.2
+
     random.seed(f'{hash_dict(init_individual)}_{seed}')
     individual = init_individual.copy()
     
@@ -196,7 +187,7 @@ def generate_mutate_individual(init_individual: dict, probability: float, variab
             individual[key] = min(max(new_value, var_range[0]), var_range[1])
         elif var_type == "float":
             # uniform is inclusive
-            new_value = round(random.gauss(old_value, sigma=old_value * 0.1), 4)
+            new_value = round(random.gauss(old_value, sigma=old_value * _SIGMA), 4)
 
             # make sure the new value is in the range
             individual[key] = min(max(new_value, var_range[0]), var_range[1])
@@ -257,7 +248,8 @@ def generate_random_individual(variable_info, seed=None):
 
 def generate_crossover_individual(parent1: dict, parent2: dict, variable_info, seed=None):
     """Generate a offspring individual from two parents"""
-    random.seed(f'{hash_dict(parent1)}_{hash_dict(parent2)}_{seed}')
+    _seed = f'{hash_dict(parent1)}_{hash_dict(parent2)}_{seed}'
+    random.seed(_seed)
     
     group_mapping = dict()
     child = dict()
@@ -271,14 +263,14 @@ def generate_crossover_individual(parent1: dict, parent2: dict, variable_info, s
                 group_mapping[g] = parent_selected
             
             # select the parent
-            if parent_selected < -1:
+            if parent_selected < 0:
                 child[key] = parent1[key]
             else:
                 child[key] = parent2[key]
         else:
             parent_selected = random.choice([-1, 1])
             
-            if parent_selected < -1:
+            if parent_selected < 0:
                 child[key] = parent1[key]
             else:
                 child[key] = parent2[key]

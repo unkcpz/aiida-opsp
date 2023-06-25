@@ -1,28 +1,21 @@
-from aiida.engine import run_get_pk
-from aiida.engine import calcfunction
+from aiida.engine import run_get_node
 from aiida import orm
-import numpy as np
 
-from aiida_opsp.workflows.ls import LocalSearchWorkChain, Rosenbrock, create_init_simplex
+from aiida_opsp.workflows.ls import NelderMeadWorkChain
 from aiida_opsp.workflows.psp_oncv import OncvPseudoBaseWorkChain
 
 def run():
-    code = orm.load_code('oncv4@localhost1')
+    code = orm.load_code('oncv4@localhost')
 
     conf_name = orm.Str('Li-low')
     angular_momentum_settings = orm.Dict(
         dict={
             's': {
-                # 'rc': 1.4,
-                # 'qcut': 8.6,
-                'ncon': 3,
                 'nbas': 7,
                 'nproj': 2,
-                'debl': 2.0,
             },
             'p': {
-                'rc': 2.2,
-                'qcut': 7.0,
+                'qcut': 7.3,
                 'ncon': 3,
                 'nbas': 7,
                 'nproj': 2,
@@ -34,7 +27,6 @@ def run():
         dict={
             'llcol': 4, # fix
             'lpopt': 5, # 1-5, algorithm enum set
-            'rc(5)': 2.2,
             'dvloc0': 0.0,
         }
     )
@@ -48,61 +40,72 @@ def run():
     
     inputs = {
         'parameters': orm.Dict(dict={
-            'max_iter': 2,
-            'xtol': 1e-1,
-            'ftol': 1e-1,
-            'init_vars': [2.872,  2.5731, 6.,     3.,     8.9284],
+            'max_iter': 100,
+            'xtol': 1e-3,
+            'ftol': 1e-3,
         }),
+        'init_individual': orm.Dict(dict={
+            's_rc': 2.2,
+            's_qcut': 5.0,
+            's_ncon': 3,
+            's_debl': 2.0,
+            'p_rc': 2.2,
+            'rc(5)': 2.2,
+        }),
+        'seed': orm.Int(1),
         'evaluate_process': OncvPseudoBaseWorkChain,
-        'vars_info': orm.Dict(dict={
+        'variable_info': orm.Dict(dict={
             's_rc': {
                 'key_name': 'angular_momentum_settings:s.rc',
-                'type': 'float',
+                'var_type': 'float',
                 'space': {
-                    'low': 2.2, 
-                    'high': 3.0,
+                    'ref_to': 'rc(5)',
+                    'range': [0.0, 1.0],
                 },
                 'local_optimize': True,
             },
             's_qcut': {
                 'key_name': 'angular_momentum_settings:s.qcut',
-                'type': 'float',
+                'var_type': 'float',
                 'space': {
-                    'low': 4.0, 
-                    'high': 10.0,
+                    'range': [4.0, 10.0],
+                },
+                'local_optimize': True,
+            },
+            'p_rc': {
+                'key_name': 'angular_momentum_settings:p.rc',
+                'var_type': 'float',
+                'space': {
+                    'ref_to': 'rc(5)',
+                    'range': [0.0, 1.0],
                 },
                 'local_optimize': True,
             },
             's_ncon': {
                 'key_name': 'angular_momentum_settings:s.ncon',
-                'type': 'int',
+                'var_type': 'int',
                 'space': {
-                    'low': 3, 
-                    'high': 4,
+                    'range': [3, 4],
                 },
                 'local_optimize': False,
             },
-            's_nbas': {
-                'key_name': 'angular_momentum_settings:s.nbas',
-                'type': 'int',
-                'space': {
-                    'low': 5, 
-                    'high': 7,
-                },
-                # 'local_optimize': False,
-            },
-            # 'angular_momentum_settings:s.nproj',
             's_debl': {
                 'key_name': 'angular_momentum_settings:s.debl',
-                'type': 'float',
+                'var_type': 'float',
                 'space': {
-                    'low': 0, 
-                    'high': 3.0,
+                    'range': [0.0, 3.0],
                 },
                 'local_optimize': True,
             },
-            # 'local_potential_settings:rc(5)',
-            # 'local_potential_settings:dvloc0',            
+            'rc(5)': {
+                'key_name': 'local_potential_settings:rc(5)',
+                'var_type': 'float',
+                'space': {
+                    'range': [2.0, 3.0],
+                },
+                'group': 'local',
+                'local_optimize': True,
+            },       
         }),
         'result_key': orm.Str('result'),
         'fixture_inputs': {
@@ -116,12 +119,10 @@ def run():
             'dump_psp': orm.Bool(False),
         }
     }
-    res, pk = run_get_pk(LocalSearchWorkChain, **inputs)
+    res, node = run_get_node(NelderMeadWorkChain, **inputs)
 
-    return res, pk
+    return res, node
     
 
 if __name__ == '__main__':
-    res, pk = run()
-    # res, pk = run_test()
-    # print(res['result'].get_dict(), pk)
+    res, node = run()
