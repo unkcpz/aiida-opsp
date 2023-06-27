@@ -173,10 +173,17 @@ class NelderMeadWorkChain(WorkChain):
             inputs = individual_to_inputs(individual, self.inputs.variable_info.get_dict(), self.inputs.fixture_inputs)
             node = self.submit(evaluate_process, **inputs)
 
+            retrive_key = f'_EVAL_NM_{op.value.upper()}_{idx}'
+
+            optimize_info = {
+                'retrive_key': retrive_key,
+                'iteration': self.ctx.num_iteration,
+            }
             node.base.extras.set('point', point)
             node.base.extras.set('individual', individual)
+            node.base.extras.set('optimize_mode', 'nelder-mead')
+            node.base.extras.set('optimize_info', optimize_info)
             
-            retrive_key = f'_EVAL_NM_{op.value.upper()}_{idx}'
             evaluates[retrive_key] = node
             self.ctx.tmp_retrive_key_storage.append(retrive_key)
             

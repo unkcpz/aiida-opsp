@@ -47,8 +47,8 @@ class GeneticAlgorithmWorkChain(WorkChain):
                 cls.new_individuals_run,
                 cls.new_individuals_inspect,
                 cls.combine_population,
-                cls.local_optimization_run,
-                cls.local_optimization_inspect,
+                # cls.local_optimization_run,
+                # cls.local_optimization_inspect,
                 # ----------------- selection -----------------
             ),
             cls.finalize,   # stop iteration and get results
@@ -152,11 +152,19 @@ class GeneticAlgorithmWorkChain(WorkChain):
         for idx, individual in enumerate(self.ctx.population):
             inputs = individual_to_inputs(individual, self.inputs.variable_info.get_dict(), self.inputs.fixture_inputs)
             node = self.submit(self.ctx.evaluate_process, **inputs)
+
+            retrive_key = f'_EVAL_IND_{idx}'
             
             # store the individual object in the extra for after use
             node.base.extras.set('individual', individual)
 
-            retrive_key = f'_EVAL_IND_{idx}'
+            optimize_info = {
+                'generation': self.ctx.current_generation,
+                'retrive_key': retrive_key,
+            }
+            node.base.extras.set('optimize_mode', 'genetic-algorithm')
+            node.base.extras.set('optimize_info', optimize_info)
+
             evaluates[retrive_key] = node
             self.ctx.tmp_retrive_key_storage.append(retrive_key)
             
