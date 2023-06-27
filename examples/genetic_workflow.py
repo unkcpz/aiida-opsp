@@ -159,12 +159,12 @@ def run():
     inputs = {
         'ga_parameters': orm.Dict(dict={
             'seed': 2023,
-            'num_generations': 2,
-            'num_individuals': 10,
-            'num_mating_individuals': 4,
+            'num_generations': 100,
+            'num_individuals': 20,
+            'num_mating_individuals': 8,
             'num_elite_individuals': 2,
-            'num_new_individuals': 1,
-            'num_offspring_individuals': 2,
+            'num_new_individuals': 4,
+            'num_offspring_individuals': 4,
             'max_thebest_count': 10,
             'elite_individual_mutate_probability': 0.4,
             'mediocre_individual_mutate_probability': 0.8,
@@ -185,8 +185,8 @@ def run():
         'local_optimization_process': NelderMeadWorkChain,
         'local_optimization_parameters': orm.Dict(dict={
             'max_iter': 10,
-            'xtol': 1e-3,
-            'ftol': 1e-3,
+            'xtol': 1e-3, # this is absolute tolerance the presicion for the input parameters
+            'ftol': 1e-1, # this is relative tolerance for the score
         }),
     }
     res, node = run_get_node(GeneticAlgorithmWorkChain, **inputs)

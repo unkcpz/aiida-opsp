@@ -288,11 +288,18 @@ class NelderMeadWorkChain(WorkChain):
         # check if should continue the iteration
         x_dist_max = self.compute_x_dist_max(self.ctx.simplex)
         self.report(f"Maximum distance value for the simplex: {x_dist_max}")
-        f_diff_max = self.compute_f_diff_max(self.ctx.scores)
+
+        
+        # the scores may be inf, so we need to filter them out
+        valid_scores = [s for s in self.ctx.scores if s != math.inf]
+        f_diff_max = self.compute_f_diff_max(valid_scores)
+        f_diff_rel = f_diff_max / np.abs(valid_scores[0])
         self.report(f"Maximum function difference: {f_diff_max}")
+        self.report(f"Relative function difference: {f_diff_rel}")
         
         # if the points are too close or the function values are too close, stop the iteration
-        self.ctx.should_continue = (x_dist_max > self.ctx.xtol) and (f_diff_max > self.ctx.ftol)
+        # use the relative tolerance to compare the function values
+        self.ctx.should_continue = (x_dist_max > self.ctx.xtol) and (f_diff_rel > self.ctx.ftol)
         self.report(
             f"End of Nelder-Mead iteration {self.ctx.num_iteration}, max number of iterations: {self.ctx.max_iter}."
         )
