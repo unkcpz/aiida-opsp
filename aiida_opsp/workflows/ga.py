@@ -78,8 +78,8 @@ class GeneticAlgorithmWorkChain(WorkChain):
                 cls.new_individuals_run,
                 cls.new_individuals_inspect,
                 cls.combine_population,
-                # cls.local_optimization_run,
-                # cls.local_optimization_inspect,
+                cls.local_optimization_run,
+                cls.local_optimization_inspect,
                 # ----------------- selection -----------------
             ),
             cls.finalize,   # stop iteration and get results
