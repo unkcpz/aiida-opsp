@@ -8,6 +8,37 @@ from aiida_opsp.workflows import load_object, PROCESS_INPUT_KWARGS
 from aiida_opsp.workflows.individual import GenerateRandomValidIndividual, GenerateMutateValidIndividual, GenerateCrossoverValidIndividual
 from aiida_opsp.utils.merge_input import individual_to_inputs
 
+def validate_ga_parameters(ga_parameters):
+    num_individuals = ga_parameters.get('num_individuals')
+    if num_individuals is None:
+        return 'num_individuals is not defined'
+    
+    num_mating_individuals = ga_parameters.get('num_mating_individuals')
+    if num_mating_individuals is None:
+        return 'num_mating_individuals is not defined'
+    
+    if num_mating_individuals < 2:
+        return 'num_mating_individuals should not less than 2'
+    
+    num_offspring_individuals = ga_parameters.get('num_offspring_individuals')
+    if num_offspring_individuals is None:
+        return 'num_offspring_individuals is not defined'
+
+    num_elite_individuals = ga_parameters.get('num_elite_individuals')
+    if num_elite_individuals is None:
+        return 'num_elite_individuals is not defined'
+
+    num_new_individuals = ga_parameters.get('num_new_individuals')
+    if num_new_individuals is None:
+        return 'num_new_individuals is not defined'    
+
+    num_mediocre_individuals = num_individuals - 2 * num_elite_individuals - num_new_individuals - num_offspring_individuals
+    if num_mediocre_individuals < 0:
+        return 'num_mediocre_individuals should not less than 0'
+
+    return None
+    
+
 class GeneticAlgorithmWorkChain(WorkChain):
     """WorkChain to run GA """
     
@@ -15,7 +46,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
     def define(cls, spec):
         """Specify imputs and outputs"""
         super().define(spec)
-        spec.input('ga_parameters', valid_type=orm.Dict)
+        spec.input('ga_parameters', valid_type=orm.Dict, validator=validate_ga_parameters)
         spec.input('evaluate_process', help='Process which produces the result to be optimized.',
             **PROCESS_INPUT_KWARGS)
         spec.input('variable_info', valid_type=orm.Dict)
