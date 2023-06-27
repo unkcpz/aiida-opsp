@@ -8,27 +8,28 @@ from aiida_opsp.workflows import load_object, PROCESS_INPUT_KWARGS
 from aiida_opsp.workflows.individual import GenerateRandomValidIndividual, GenerateMutateValidIndividual, GenerateCrossoverValidIndividual
 from aiida_opsp.utils.merge_input import individual_to_inputs
 
-def validate_ga_parameters(ga_parameters):
-    num_individuals = ga_parameters.get('num_individuals')
+def validate_ga_parameters(ga_parameters, _):
+    parameters = ga_parameters.get_dict()
+    num_individuals = parameters.get('num_individuals')
     if num_individuals is None:
         return 'num_individuals is not defined'
     
-    num_mating_individuals = ga_parameters.get('num_mating_individuals')
+    num_mating_individuals = parameters.get('num_mating_individuals')
     if num_mating_individuals is None:
         return 'num_mating_individuals is not defined'
     
     if num_mating_individuals < 2:
         return 'num_mating_individuals should not less than 2'
     
-    num_offspring_individuals = ga_parameters.get('num_offspring_individuals')
+    num_offspring_individuals = parameters.get('num_offspring_individuals')
     if num_offspring_individuals is None:
         return 'num_offspring_individuals is not defined'
 
-    num_elite_individuals = ga_parameters.get('num_elite_individuals')
+    num_elite_individuals = parameters.get('num_elite_individuals')
     if num_elite_individuals is None:
         return 'num_elite_individuals is not defined'
 
-    num_new_individuals = ga_parameters.get('num_new_individuals')
+    num_new_individuals = parameters.get('num_new_individuals')
     if num_new_individuals is None:
         return 'num_new_individuals is not defined'    
 
@@ -41,6 +42,9 @@ def validate_ga_parameters(ga_parameters):
 
 class GeneticAlgorithmWorkChain(WorkChain):
     """WorkChain to run GA """
+
+    # the maximum number of the best individuals not updated
+    _MAX_THEBEST_COUNT = 10
     
     @classmethod
     def define(cls, spec):
@@ -124,6 +128,9 @@ class GeneticAlgorithmWorkChain(WorkChain):
 
         # set base local optimization process
         self.ctx.local_optimization_process = load_object(self.inputs.local_optimization_process.value)
+
+        # counting the best individual appear times by generations
+        self.ctx.max_thebest_count = ga_parameters.get('max_thebest_count', self._MAX_THEBEST_COUNT)
 
         # tmp_retrive_key_storage
         # This is for store the key so the parser step know which process to fetch from ctx
@@ -268,7 +275,27 @@ class GeneticAlgorithmWorkChain(WorkChain):
             self.report(f'Final generation {self.ctx.num_generations} reached, stopping.')
             self.ctx.should_continue = False
 
-        # TODO if the best fitness is not improved for a maximum times, stop the optimization
+        # the best fitness is not improved for a maximum times, stop the optimization
+        epsilon = 1e-6
+        thebest = list(self.ctx.sorted_scores.values())[0]
+        if 'thebest' not in self.ctx:
+            # the first generation
+            self.ctx.thebest = thebest
+            self.ctx.thebest_count = 0
+
+        if thebest < self.ctx.thebest - epsilon:
+            self.report(f'The best score is improved from {self.ctx.thebest} to {thebest}, from generation {self.ctx.current_generation-1} to {self.ctx.current_generation}')
+            self.ctx.thebest = thebest
+            self.ctx.thebest_count = 0
+        elif abs(self.ctx.thebest - thebest) < epsilon:
+            # the best fitness is not improved
+            self.ctx.thebest_count += 1
+        else:
+            raise RuntimeError(f'The best score is increase, should not happen. {self.ctx.thebest} -> {thebest}')
+
+        if self.ctx.thebest_count > self.ctx.max_thebest_count:
+            self.report(f'The best score is not improved for {self.ctx.thebest_count} times, stopping.')
+            self.ctx.should_continue = False
 
     def crossover_run(self):
         """Use previous half of the population with better fitness to crossover to create new individuals

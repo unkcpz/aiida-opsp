@@ -165,6 +165,7 @@ def run():
             'num_elite_individuals': 2,
             'num_new_individuals': 1,
             'num_offspring_individuals': 2,
+            'max_thebest_count': 10,
             'elite_individual_mutate_probability': 0.4,
             'mediocre_individual_mutate_probability': 0.8,
         }),
