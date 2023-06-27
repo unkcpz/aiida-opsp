@@ -3,5 +3,5 @@
 Please turn on the caching:
 
 ```bash
-verdi config set -a caching.enabled_for opsp.pseudo.oncv
+verdi config set caching.default_enabled True
 ```
