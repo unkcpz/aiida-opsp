@@ -3,6 +3,7 @@ from aiida import orm
 
 from aiida_opsp.workflows.ga import GeneticAlgorithmWorkChain
 from aiida_opsp.workflows.psp_oncv import OncvPseudoBaseWorkChain
+from aiida_opsp.workflows.ls import NelderMeadWorkChain
 
 conf_name = orm.Str('Li-low')
 angular_momentum_settings = orm.Dict(
@@ -156,7 +157,7 @@ def run():
     code = orm.load_code('oncv4@localhost')
 
     inputs = {
-        'parameters': orm.Dict(dict={
+        'ga_parameters': orm.Dict(dict={
             'seed': 2023,
             'num_generations': 2,
             'num_individuals': 10,
@@ -166,11 +167,6 @@ def run():
             'num_offspring_individuals': 2,
             'elite_individual_mutate_probability': 0.4,
             'mediocre_individual_mutate_probability': 0.8,
-            # 'local_search_base_parameters': {
-            #     'max_iter': 2,
-            #     'xtol': 1e-1,
-            #     'ftol': 1e-1,
-            # }
         }),
         'evaluate_process': OncvPseudoBaseWorkChain,
         'variable_info': orm.Dict(dict=variable_info),
@@ -184,7 +180,13 @@ def run():
             'nlcc_settings': nlcc_settings,
             'run_atomic_test': orm.Bool(True),
             'dump_psp': orm.Bool(False),
-        }
+        },
+        'local_optimization_process': NelderMeadWorkChain,
+        'local_optimization_parameters': orm.Dict(dict={
+            'max_iter': 10,
+            'xtol': 1e-3,
+            'ftol': 1e-3,
+        }),
     }
     res, node = run_get_node(GeneticAlgorithmWorkChain, **inputs)
 

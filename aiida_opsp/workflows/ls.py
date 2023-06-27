@@ -285,7 +285,7 @@ class NelderMeadWorkChain(WorkChain):
         self.report(f"Maximum function difference: {f_diff_max}")
         
         # if the points are too close or the function values are too close, stop the iteration
-        self.ctx.should_continue = (x_dist_max > self.ctx.xtol) or (f_diff_max > self.ctx.ftol)
+        self.ctx.should_continue = (x_dist_max > self.ctx.xtol) and (f_diff_max > self.ctx.ftol)
         self.report(
             f"End of Nelder-Mead iteration {self.ctx.num_iteration}, max number of iterations: {self.ctx.max_iter}."
         )

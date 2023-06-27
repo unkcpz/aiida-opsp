@@ -1,11 +1,9 @@
-import numpy as np
 import random
 
 from aiida import orm
-from aiida.engine import WorkChain, while_, append_
+from aiida.engine import WorkChain, while_
 import math
 
-from aiida_opsp.workflows.ls import LocalSearchWorkChain
 from aiida_opsp.workflows import load_object, PROCESS_INPUT_KWARGS
 from aiida_opsp.workflows.individual import GenerateRandomValidIndividual, GenerateMutateValidIndividual, GenerateCrossoverValidIndividual
 from aiida_opsp.utils.merge_input import individual_to_inputs
@@ -17,12 +15,16 @@ class GeneticAlgorithmWorkChain(WorkChain):
     def define(cls, spec):
         """Specify imputs and outputs"""
         super().define(spec)
-        spec.input('parameters', valid_type=orm.Dict)
+        spec.input('ga_parameters', valid_type=orm.Dict)
         spec.input('evaluate_process', help='Process which produces the result to be optimized.',
             **PROCESS_INPUT_KWARGS)
         spec.input('variable_info', valid_type=orm.Dict)
         spec.input('result_key', valid_type=orm.Str)   
         spec.input_namespace('fixture_inputs', required=False, dynamic=True)
+
+        spec.input('local_optimization_process', help='Process which produces the result to be optimized.',
+            **PROCESS_INPUT_KWARGS)
+        spec.input('local_optimization_parameters', valid_type=orm.Dict)
         
         spec.outline(
             cls.init_setup,
@@ -35,7 +37,9 @@ class GeneticAlgorithmWorkChain(WorkChain):
                 cls.state_update,
                 # ----------------- selection -----------------
                 # the individuals are update in the ctx
-                # when the iteration stop, the step following needs to be skipped
+                # to stop the iteration I set `should_continue` flag in previous state_update step, 
+                # Which means the following steps also cross-by therefore the following steps need to be skipped
+                # in the final iteration after the should_continue flag is set to False.
                 cls.crossover_run,
                 cls.crossover_inspect,
                 cls.mutate_run,
@@ -43,8 +47,8 @@ class GeneticAlgorithmWorkChain(WorkChain):
                 cls.new_individuals_run,
                 cls.new_individuals_inspect,
                 cls.combine_population,
-                # cls.local_optimization_run,
-                # cls.local_optimization_inspect,
+                cls.local_optimization_run,
+                cls.local_optimization_inspect,
                 # ----------------- selection -----------------
             ),
             cls.finalize,   # stop iteration and get results
@@ -57,34 +61,38 @@ class GeneticAlgorithmWorkChain(WorkChain):
         spec.exit_code(203, 'ERROR_FITNESS_HAS_WRONG_NUM_OF_RESULTS', message='Fitness has wrong number of results')
         spec.exit_code(204, 'ERROR_MUTATE_NOT_FINISHED_OK', message='Mutate not finished okay')
         spec.exit_code(205, 'ERROR_NEW_INDIVIDUALS_NOT_FINISHED_OK', message='New individuals not finished okay')
+        spec.exit_code(206, 'ERROR_LOCAL_OPTIMIZATION_NOT_FINISHED_OK', message='Local optimization not finished okay')
 
          
     def init_setup(self):
         """prepare initial ctx"""
         
         # to store const parameters in ctx over GA procedure
-        parameters = self.inputs.parameters.get_dict()
+        ga_parameters = self.inputs.ga_parameters.get_dict()
         
         # init current optimize session aka generation in GA
         self.ctx.current_generation = 0
 
         self.ctx.should_continue = True
         
-        self.ctx.seed = parameters['seed']
+        self.ctx.seed = ga_parameters['seed']
 
-        self.ctx.num_generations = parameters['num_generations']
-        self.ctx.num_individuals = parameters['num_individuals']
-        self.ctx.num_elite_individuals = parameters['num_elite_individuals']
-        self.ctx.num_new_individuals = parameters['num_new_individuals']
-        self.ctx.num_offspring_individuals = parameters['num_offspring_individuals']
+        self.ctx.num_generations = ga_parameters['num_generations']
+        self.ctx.num_individuals = ga_parameters['num_individuals']
+        self.ctx.num_elite_individuals = ga_parameters['num_elite_individuals']
+        self.ctx.num_new_individuals = ga_parameters['num_new_individuals']
+        self.ctx.num_offspring_individuals = ga_parameters['num_offspring_individuals']
         self.ctx.num_mediocre_individuals = self.ctx.num_individuals - 2 * self.ctx.num_elite_individuals - self.ctx.num_new_individuals - self.ctx.num_offspring_individuals
         
-        self.ctx.num_mating_individuals = parameters['num_mating_individuals']
-        self.ctx.elite_individual_mutate_probability = parameters['elite_individual_mutate_probability']
-        self.ctx.mediocre_individual_mutate_probability = parameters['mediocre_individual_mutate_probability']
+        self.ctx.num_mating_individuals = ga_parameters['num_mating_individuals']
+        self.ctx.elite_individual_mutate_probability = ga_parameters['elite_individual_mutate_probability']
+        self.ctx.mediocre_individual_mutate_probability = ga_parameters['mediocre_individual_mutate_probability']
 
         # set base evaluate process
         self.ctx.evaluate_process = load_object(self.inputs.evaluate_process.value)
+
+        # set base local optimization process
+        self.ctx.local_optimization_process = load_object(self.inputs.local_optimization_process.value)
 
         # tmp_retrive_key_storage
         # This is for store the key so the parser step know which process to fetch from ctx
@@ -190,6 +198,8 @@ class GeneticAlgorithmWorkChain(WorkChain):
         # order the fitness dict by score
         self.ctx.sorted_scores = dict(sorted(scores.items(), key=lambda x: x[1]))
         self.ctx.sorted_individuals = {key: individuals[key] for key in self.ctx.sorted_scores}
+
+        self.logger.warning(f"scores: {list(self.ctx.sorted_scores.values())}")
 
     def group_individuals_by_scores(self):
         self.report('Grouping individuals to categories.')
@@ -392,32 +402,51 @@ class GeneticAlgorithmWorkChain(WorkChain):
         self.ctx.population = self.ctx.elite_individuals + self.ctx.mutate_elite_individuals + self.ctx.mutate_mediocre_individuals + self.ctx.new_individuals
 
         
-    # def local_search(self):
-    #     """ local_search of elitism
-    #     """
-    #     # TODO: very tricky, find a better way to do this
-    #     # Now for the first generation, run the local search for unmutated elitism
-    #     # for the rest of generation, run the local search for mutated elitism
-    #     self.report(f'current_optimize_session: {self.ctx.current_optimize_session}')
-    #     if self.ctx.current_optimize_session == 1:
-    #         to_mutated_elitism = self.ctx.elitism
-    #     else:
-    #         to_mutated_elitism = self.ctx.mut_elitism
-    #         
-    #     for ind in to_mutated_elitism:
-    #         ls_parameters = self.ctx.const_parameters['local_search_base_parameters']
-    #         ls_parameters['init_vars'] = list(ind)
-    #         
-    #         inputs = {
-    #             'parameters': orm.Dict(dict=ls_parameters),
-    #             'evaluate_process': self.inputs.evaluate_process,
-    #             'vars_info': self.inputs.vars_info,
-    #             'result_key': self.inputs.result_key,
-    #             'fixture_inputs': self.inputs.fixture_inputs,
-    #         }
-    #         running = self.submit(LocalSearchWorkChain, **inputs)
-    #         self.to_context(workchain_elitism=append_(running))
+    def local_optimization_run(self):
+        """local optimization for the population"""
+        if not self.ctx.should_continue:
+            return None
+        
+        inputs = {
+            'evaluate_process': self.ctx.evaluate_process,
+            'variable_info': self.inputs.variable_info,
+            'fixture_inputs': self.inputs.fixture_inputs,
+        }
+        
+        evaluates = dict()
+        for idx, individual in enumerate(self.ctx.population):
+            new_seed = self.ctx.seed + idx
+            inputs['seed'] = orm.Int(new_seed)
+            inputs['init_individual'] = orm.Dict(dict=individual)
+            inputs['parameters'] = self.inputs.local_optimization_parameters
+            inputs['result_key'] = self.inputs.result_key
+
+            node = self.submit(self.ctx.local_optimization_process, **inputs)
+            
+            retrive_key = f'_LOCAL_OPT_{idx}'
+            evaluates[retrive_key] = node
+            
+            self.ctx.tmp_retrive_key_storage.append(retrive_key)
+            
+        return self.to_context(**evaluates)
     
+    def local_optimization_inspect(self):
+        if not self.ctx.should_continue:
+            return None
+        
+        population = list()
+        while len(self.ctx.tmp_retrive_key_storage) > 0:
+            retrive_key = self.ctx.tmp_retrive_key_storage.pop(0)
+            self.report(f"Retriving output for evaluation {retrive_key}")
+            node = self.ctx[retrive_key]
+            if not node.is_finished_ok:
+                self.report(f'node {node.pk} is not finished ok')
+                return self.exit_codes.ERROR_LOCAL_OPTIMIZATION_NOT_FINISHED_OK
+            else:
+                population.append(node.outputs['final_individual'].get_dict())
+                    
+        self.ctx.population = population
+            
     def finalize(self):
         """Write to output the best individual and its fitness, and the its uuid of evaluation process"""
         self.report('finalize')
