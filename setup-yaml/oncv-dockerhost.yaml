@@ -1,0 +1,11 @@
+label: "oncv4"
+description: "ONCV 4.0.1"
+default_calc_job_plugin: "opsp.pseudo.oncv"
+filepath_executable: "oncvpsp.x"
+computer: "dockerhost"
+engine_command: "docker run -i --rm -v $PWD:/workdir:rw -u 1001:1001 -w /workdir {image_name} sh -c"
+wrap_cmdline_params: true
+use_double_quotes: true
+image_name: "pspgen/oncvpsp:main"
+prepend_text: " "
+append_text: " "

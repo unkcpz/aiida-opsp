@@ -140,7 +140,7 @@ variable_info = {
 }
 
 def run():
-    code = orm.load_code('oncv4@localhost')
+    code = orm.load_code('oncv4@dockerhost')
 
     inputs = {
         'evaluate_process': OncvPseudoBaseWorkChain,
@@ -160,6 +160,7 @@ def run():
     _, node = run_get_node(GenerateRandomValidIndividual, **inputs)
     
     individual = node.outputs.final_individual
+    print("A random valid individual is generated.")
     print(individual.get_dict())
 
     # Run mutate the individual
@@ -168,6 +169,7 @@ def run():
     
     _, node = run_get_node(GenerateMutateValidIndividual, **inputs)
 
+    print("A mutated valid individual is generated from the random generated one.")
     print(node.outputs.final_individual.get_dict())
 
     

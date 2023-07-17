@@ -1,5 +1,4 @@
 examples/submit_test/*
-setup-yaml/*
 
 *.pyc
 *.egg-info/*
