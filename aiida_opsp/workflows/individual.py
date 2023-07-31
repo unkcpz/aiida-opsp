@@ -1,3 +1,4 @@
+from __future__ import annotations
 import random
 from aiida.engine import WorkChain, while_, ToContext
 from aiida import orm
@@ -7,6 +8,15 @@ from aiida_opsp.utils.merge_input import individual_to_inputs
 from aiida_opsp.utils import hash_dict
 
 class _MixinGenerateValidIndividual(WorkChain):
+
+    # The base seed for distinguishing different type of random generations.
+    # The scenario that will cause duplicated individuals is that when the seed increment from both
+    # the individual generator and from inside GA workflow, when increment by 1 will give the same result which 
+    # is not expected. To avoid this, we use a base seed to multiply the seed from the individual generator.
+    # if not set use the name of the class.
+    # The base seed multiplier is very important it is also used as the base seed to distinguish the different 
+    # random generation type. 
+    _BASE_SEED_MUTIPLIER: str | None = None
     
     @classmethod
     def define(cls, spec):
@@ -38,8 +48,11 @@ class _MixinGenerateValidIndividual(WorkChain):
         self.ctx.count = 0
         self.ctx.should_continue = True
 
+        if self._BASE_SEED_MUTIPLIER is None:
+            self._BASE_SEED_MUTIPLIER = int.from_bytes(self.__class__.__name__.encode('utf-8'), 'little')
+
         # the seed need to be update upon the iter number, otherwise will always give the same result
-        self.ctx.seed = self.inputs.seed.value
+        self.ctx.seed = self.inputs.seed.value + self._BASE_SEED_MUTIPLIER
 
     def should_continue(self):
         if not self.ctx.count < self.inputs.max_iteration.value:
@@ -65,7 +78,7 @@ class _MixinGenerateValidIndividual(WorkChain):
         self.ctx.count += 1
 
         # update the seed to generate new input
-        self.ctx.seed += self.ctx.count
+        self.ctx.seed += self.ctx.count * self._BASE_SEED_MUTIPLIER
         
         return ToContext(evaluate=process)
     
