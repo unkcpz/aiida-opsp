@@ -17,7 +17,7 @@ class _MixinGenerateValidIndividual(WorkChain):
         spec.input_namespace('fixture_inputs', required=False, dynamic=True)
         
         spec.input('seed', valid_type=orm.Int, default=lambda: orm.Int(2022))
-        spec.input('max_iteration', valid_type=orm.Int, default=lambda: orm.Int(20))
+        spec.input('max_iteration', valid_type=orm.Int, default=lambda: orm.Int(40))
         
         spec.outline(
             cls.setup,
