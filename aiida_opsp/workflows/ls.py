@@ -4,7 +4,7 @@ import copy
 from enum import Enum
 
 from aiida import orm
-from aiida.engine import WorkChain, while_, if_
+from aiida.engine import WorkChain, while_, if_, calcfunction
 import math
 import scipy.linalg as la
 
@@ -47,9 +47,9 @@ def create_random_simplex(point, fixture_variables, variable_info: dict, seed=20
     
     The simplex are created by adding random points to the given point.
     The point is a dict of parameters to be optimized. 
-    The guassian distribution is used to generate the random values with sigma=0.05 as hard coded in `generate_mutate_individual` function
+    The guassian distribution is used to generate the random values with sigma=0.06 as hard coded in `generate_mutate_individual` function
     of `aiida_opsp.workflows.ga`."""
-    _SIGMA = 0.1
+    _SIGMA = 0.06
     seed = f'{hash_dict(point)}_{seed}'
     random.seed(seed)
 
@@ -85,13 +85,21 @@ def create_random_simplex(point, fixture_variables, variable_info: dict, seed=20
         
     return simplex 
 
-def sort_simplex(simplex, scores):
+@calcfunction
+def sort_simplex(simplex, scores, uuids):
     """Sort the simplex by the scores of the points in the simplex"""
     argsort = np.argsort(scores)
     simplex = [simplex[i] for i in argsort]
     scores = [scores[i] for i in argsort]
+    uuids = [uuids[i] for i in argsort]
 
-    return simplex, scores
+    return orm.Dict(dict={
+        "simplex": simplex, 
+        "scores": scores,
+        "best_point": simplex[0],
+        "best_score": scores[0],
+        "best_uuid": uuids[0],
+    })
 
 class NelderMeadWorkChain(WorkChain):
     """WorkChain to run GA """
@@ -197,6 +205,7 @@ class NelderMeadWorkChain(WorkChain):
         self.report('Checking finished evaluations.')
         scores = dict()
         points = dict() 
+        uuids = dict()
 
         while len(self.ctx.tmp_retrive_key_storage) > 0:
             key = self.ctx.tmp_retrive_key_storage.pop(0)
@@ -213,6 +222,7 @@ class NelderMeadWorkChain(WorkChain):
                 if proc.exit_status == 201: # ERROR_PSPOT_HAS_NODE
                     scores[key] = math.inf
                     points[key] = proc.base.extras.get('point')
+                    uuids[key] = proc.uuid
                 else:
                     return self.exit_codes.ERROR_EVALUATE_PROCESS_FAILED
             else:
@@ -220,13 +230,15 @@ class NelderMeadWorkChain(WorkChain):
                 result_key = self.inputs.result_key.value
                 scores[key] = proc.outputs[result_key].value                
                 points[key] = proc.base.extras.get('point')
+                uuids[key] = proc.uuid
             
         self.report(f"Evaluate results: points are {points}, the corresponding output {scores}.")
         
         points_lst = list(points.values())
         scores_lst = list(scores.values())
+        uuids_lst = list(uuids.values())
 
-        return points_lst, scores_lst
+        return points_lst, scores_lst, uuids_lst
              
     def setup(self):
         # to store const parameters in ctx over GA procedure
@@ -252,6 +264,9 @@ class NelderMeadWorkChain(WorkChain):
         # XXX it is important to select a good initial point, 
         # however it is not the focus of this workchain, we just use a 
         # random points in the range of the initial individual
+        # there are posibility that the simplex is invalid to produce the pseudopotentail,
+        # in this case, in principle, we should re-sample the simplex, but we just use as small sigma
+        # to make sure the simplex is valid.
         self.ctx.simplex = create_random_simplex(point, self.ctx.fixture_variables, self.ctx.variable_info, seed=self.inputs.seed.value)
         self.ctx._points_to_evaluate = self.ctx.simplex
 
@@ -263,7 +278,7 @@ class NelderMeadWorkChain(WorkChain):
         self._submit(op=Operation.INIT)
         
     def update_preparation(self):
-        self.ctx.simplex, self.ctx.scores = self._inspect()
+        self.ctx.simplex, self.ctx.scores, self.ctx.uuids = self._inspect()
     
     def should_continue(self):
         """return a bool, whether create new generation"""
@@ -281,7 +296,8 @@ class NelderMeadWorkChain(WorkChain):
         
     def initialize_iteration(self):
         # sort the simplex upon the values of points
-        self.ctx.simplex, self.ctx.scores = sort_simplex(self.ctx.simplex, self.ctx.scores)
+        res = sort_simplex(self.ctx.simplex, self.ctx.scores, self.ctx.uuids)
+        self.ctx.simplex, self.ctx.scores = res['simplex'], res['scores']
         self.report(f"Sorted scores: {self.ctx.scores}")
         self.logger.info(f"Sorted simplex: {self.ctx.simplex}")
         
@@ -323,16 +339,16 @@ class NelderMeadWorkChain(WorkChain):
         self._submit(op=Operation.REFLECTION)
         
     def update_reflection(self):
-        points, scores = self._inspect()
+        points, scores, uuids = self._inspect()
         xr, fxr = points[0], scores[0]
-        self.ctx.point_reflected = (xr, fxr)
+        self.ctx.point_reflected = (xr, fxr, uuids[0])
         
         if fxr < self.ctx.scores[0]:
             "if the reflected point is better than the best point, try expansion"
             self.ctx.next_operation = Operation.EXPANSION
         else:
             if fxr < self.ctx.scores[-2]:
-                self._update_last(xr, fxr)
+                self._update_last(xr, fxr, uuids[0])
                 self.ctx.next_operation = Operation.CONTINUE
             else:
                 if fxr < self.ctx.scores[-1]:
@@ -340,9 +356,10 @@ class NelderMeadWorkChain(WorkChain):
                 else:
                     self.ctx.next_operation = Operation.INSIDE_CONTRACTION
                     
-    def _update_last(self, x, f):
+    def _update_last(self, x, f, uuid):
         self.ctx.simplex[-1] = x
         self.ctx.scores[-1] = f
+        self.ctx.uuids[-1] = uuid
                 
     def do_expansion(self):
         return self.ctx.next_operation == Operation.EXPANSION
@@ -360,13 +377,13 @@ class NelderMeadWorkChain(WorkChain):
         """
         Retrieve the results of an expansion step.
         """
-        points, scores = self._inspect()
+        points, scores, uuids = self._inspect()
         xe, fxe = points[0], scores[0]
-        xr, fxr = self.ctx.point_reflected
+        _, fxr, _ = self.ctx.point_reflected
         if fxe < fxr:
-            self._update_last(xe, fxe)
+            self._update_last(xe, fxe, uuids[0])
         else:
-            self._update_last(xr, fxr)
+            self._update_last(*self.ctx.point_reflected)
             
         self.ctx.next_operation = Operation.CONTINUE
         
@@ -385,11 +402,11 @@ class NelderMeadWorkChain(WorkChain):
         """
         Retrieve the results of an contraction step.
         """
-        points, scores = self._inspect()
+        points, scores, uuids = self._inspect()
         xc, fxc = points[0], scores[0]
-        _, fxr = self.ctx.point_reflected
+        _, fxr, _ = self.ctx.point_reflected
         if fxc < fxr:
-            self._update_last(xc, fxc)
+            self._update_last(xc, fxc, uuids[0])
             self.ctx.next_operation = Operation.CONTINUE
         else:
             # shrink
@@ -410,10 +427,10 @@ class NelderMeadWorkChain(WorkChain):
         """
         Retrieve the results of an inside contraction step.
         """
-        points, scores = self._inspect()
+        points, scores, uuids = self._inspect()
         xcc, fxcc = points[0], scores[0]
         if fxcc < self.ctx.scores[-1]:
-            self._update_last(xcc, fxcc)
+            self._update_last(xcc, fxcc, uuids[0])
             self.ctx.next_operation = Operation.CONTINUE
         else:
             # shrink
@@ -440,7 +457,7 @@ class NelderMeadWorkChain(WorkChain):
         """
         Retrieve the results of an shrink step.
         """
-        self.ctx.simplex[1:], self.ctx.scores[1:] = self._inspect()
+        self.ctx.simplex[1:], self.ctx.scores[1:], self.ctx.uuids[1:] = self._inspect()
 
         self.ctx.next_operation = Operation.CONTINUE
         
