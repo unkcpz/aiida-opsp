@@ -11,6 +11,7 @@ import scipy.linalg as la
 from aiida_opsp.workflows import load_object, PROCESS_INPUT_KWARGS
 from aiida_opsp.utils import hash_dict
 from aiida_opsp.utils.merge_input import individual_to_inputs
+from aiida_opsp.workflows.individual import GenerateValidSimplexIndividual
 
 # simplex parameters from scipy.minimize
 RHO = 1
@@ -41,49 +42,6 @@ def extract_search_variables(individual, variable_info):
             
     return point, fixture_variables
 
-def create_random_simplex(point, fixture_variables, variable_info: dict, seed=2022):
-    """Create a simplex from the given point, where the other points are gaussians around.
-    For the new point of the simplex only one variable is changed at a time.
-    
-    The simplex are created by adding random points to the given point.
-    The point is a dict of parameters to be optimized. 
-    The guassian distribution is used to generate the random values with sigma=0.06 as hard coded in `generate_mutate_individual` function
-    of `aiida_opsp.workflows.ga`."""
-    _SIGMA = 0.06
-    seed = f'{hash_dict(point)}_{seed}'
-    random.seed(seed)
-
-    simplex = [point]
-    for key, value in point.items():
-        space = variable_info[key]['space']
-        ref_to = space.get('ref_to', None)
-        if ref_to is not None:
-            if ref_to not in fixture_variables and ref_to not in point:
-                raise ValueError(f'Cannot find {ref_to} in fixture_variables or point')
-                
-            try: 
-                ref_value = fixture_variables[ref_to]
-            except KeyError:
-                ref_value = point[ref_to]
-
-            var_range = [i + ref_value for i in space['range']]
-        else:
-            var_range = space['range']
-            
-        # set the low_bound and high_bound for the new value
-        low_bound, high_bound = var_range
-        while True:
-            # generate a new value with gaussian distribution until it is in the range
-            new_value = random.gauss(value, value * _SIGMA)
-            if low_bound < new_value < high_bound:
-                break
-        
-        # deepcopy to avoid change the original point
-        new_point = copy.deepcopy(point)
-        new_point[key] = new_value
-        simplex.append(new_point)
-        
-    return simplex 
 
 @calcfunction
 def sort_simplex(simplex, scores, uuids):
@@ -120,6 +78,8 @@ class NelderMeadWorkChain(WorkChain):
         
         spec.outline(
             cls.setup,
+            cls.prepare_init_simplex,
+            cls.prepare_init_simplex_inspect,
             cls.submit_preparation,
             cls.update_preparation,
             while_(cls.should_continue)(
@@ -152,6 +112,11 @@ class NelderMeadWorkChain(WorkChain):
             201,
             'ERROR_EVALUATE_PROCESS_FAILED',
             message='GA optimization failed because one of the evaluate processes did not finish ok.'
+        )
+        spec.exit_code(
+            202,
+            'ERROR_PREPARE_INIT_SIMPLEX_FAILED',
+            message='local Nelder-Mead optimization failed because prepare init simplex failed.',
         )
         
     def _restore_individual(self, point, fixture_variables):
@@ -220,7 +185,7 @@ class NelderMeadWorkChain(WorkChain):
                 # - the evalute process failed for resoure reason, should raise and reported.
                 # - TODO: Test configuration 0 is get but no other configuration results -> check what output look like
                 if proc.exit_status == 201: # ERROR_PSPOT_HAS_NODE
-                    scores[key] = math.inf
+                    scores[key] = 999.0
                     points[key] = proc.base.extras.get('point')
                     uuids[key] = proc.uuid
                 else:
@@ -257,21 +222,66 @@ class NelderMeadWorkChain(WorkChain):
         # It needs to be kept empty in between a run-inspect session.
         self.ctx.tmp_retrive_key_storage = []
         
-    def submit_preparation(self):
-        point, self.ctx.fixture_variables = extract_search_variables(self.inputs.init_individual, self.ctx.variable_info)
-        self.report(f"Split the individual into: point: {point}, fixture_variables: {self.ctx.fixture_variables}.")
+    def prepare_init_simplex(self):
+        self.ctx.init_point, self.ctx.fixture_variables = extract_search_variables(self.inputs.init_individual, self.ctx.variable_info)
+        self.report(f'On preparing initial simplex')
+        self.report(f"Split the individual into: point: {self.ctx.init_point}, fixture_variables: {self.ctx.fixture_variables}.")
 
+        # submit evaluation for the pop ind
+        evaluates = dict()
+        for idx, key in enumerate(self.ctx.init_point.keys()):
+            inputs = {
+                'evaluate_process': self.inputs.evaluate_process,
+                'variable_info': self.inputs.variable_info,
+                'fixture_inputs': self.inputs.fixture_inputs,
+                'init_point': orm.Dict(dict=self.ctx.init_point),
+                'fixture_variables': orm.Dict(dict=self.ctx.fixture_variables),
+                'mutate_key': orm.Str(key),
+            }
+            node = self.submit(GenerateValidSimplexIndividual, **inputs)
+
+            retrive_key = f'_EVAL_NM_INIT_SIMPLEX_{idx}'
+
+            optimize_info = {
+                'retrive_key': retrive_key,
+            }
+            node.base.extras.set('optimize_mode', 'nelder-mead')
+            node.base.extras.set('optimize_info', optimize_info)
+            
+            evaluates[retrive_key] = node
+            self.ctx.tmp_retrive_key_storage.append(retrive_key)
+            
+        return self.to_context(**evaluates)
+
+    def prepare_init_simplex_inspect(self):
+        simplex = [self.ctx.init_point]
+        while len(self.ctx.tmp_retrive_key_storage) > 0:
+            key = self.ctx.tmp_retrive_key_storage.pop(0)
+            self.report(f'Retrieving output for evaluation {key}')
+            
+            proc: orm.WorkChainNode = self.ctx[key]
+            if not proc.is_finished_ok:
+                return self.exit_codes.ERROR_PREPARE_INIT_POPULATION_FAILED
+            else:
+                valid_individual = proc.outputs.final_individual.get_dict()
+                point, _ = extract_search_variables(valid_individual, self.ctx.variable_info)
+                simplex.append(point)
+
+        self.ctx.simplex = simplex
+
+        # assert the number of points of a simplex is one more than the number of variables
+        if not len(self.ctx.simplex) == len(self.ctx.init_point) + 1:
+            return self.exit_codes.ERROR_PREPARE_INIT_SIMPLEX_FAILED
+        
+    def submit_preparation(self):
         # XXX it is important to select a good initial point, 
         # however it is not the focus of this workchain, we just use a 
         # random points in the range of the initial individual
         # there are posibility that the simplex is invalid to produce the pseudopotentail,
         # in this case, in principle, we should re-sample the simplex, but we just use as small sigma
         # to make sure the simplex is valid.
-        self.ctx.simplex = create_random_simplex(point, self.ctx.fixture_variables, self.ctx.variable_info, seed=self.inputs.seed.value)
+        #self.ctx.simplex = create_random_simplex(point, self.ctx.fixture_variables, self.ctx.variable_info, seed=self.inputs.seed.value)
         self.ctx._points_to_evaluate = self.ctx.simplex
-
-        # assert the number of points of a simplex is one more than the number of variables
-        assert len(self.ctx.simplex) == len(point) + 1
 
         # set the next operation to "CONTINUE" so only the reflection is run, 
         self.ctx.next_operation = Operation.CONTINUE

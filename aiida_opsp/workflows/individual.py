@@ -163,6 +163,36 @@ class GenerateCrossoverValidIndividual(_MixinGenerateValidIndividual):
         
         self.ctx.individual = generate_crossover_individual(self.inputs.parent1.get_dict(), self.inputs.parent2.get_dict(), self.inputs.variable_info.get_dict(), self.ctx.seed)
 
+class GenerateValidSimplexIndividual(_MixinGenerateValidIndividual):
+    
+    @classmethod
+    def define(cls, spec):
+        super().define(spec)
+
+        spec.input('init_point', valid_type=orm.Dict)
+        spec.input('mutate_key', valid_type=orm.Str)
+        spec.input('fixture_variables', valid_type=orm.Dict)
+        spec.input('sigma', valid_type=orm.Float, default=lambda: orm.Float(0.1))
+
+    def generate(self):
+        # before generate and continue, check if the previous run is okay
+        # don't do it the first time where the self.ctx.individual is not set
+        if "individual" in self.ctx:
+            process = self.ctx.evaluate
+            
+            if process.is_finished_ok:
+                self.ctx.final_individual = self.ctx.individual
+                self.ctx.should_continue = False        
+        
+        self.ctx.individual = generate_simplex_individual(
+            self.inputs.init_point.get_dict(), 
+            self.inputs.mutate_key.value,
+            self.inputs.fixture_variables.get_dict(), 
+            self.inputs.variable_info.get_dict(), 
+            self.inputs.sigma.value, 
+            self.ctx.seed
+        )
+
 def generate_mutate_individual(init_individual: dict, probability: float, variable_info, seed=None):
     """Generate a mutate individual slightly different from given one.
     
@@ -291,6 +321,62 @@ def generate_crossover_individual(parent1: dict, parent2: dict, variable_info, s
     return child
         
         
+def _restore_individual(point, fixture_variables):
+    """restore inputs for submission from variable_info"""
+    individual = dict()
+    for key, value in point.items():
+        individual[key] = value
+    for key, value in fixture_variables.items():
+        individual[key] = value
+        
+    return individual
+
+def generate_simplex_individual(point, key, fixture_variables, variable_info: dict, sigma: float=0.1, seed=2022):
+    """Create a simplex individual from the given point, where the other points are gaussians around.
+    For the new point of the simplex only one variable is changed at a time.
+    
+    The simplex are created by adding random points to the given point.
+    The point is a dict of parameters to be optimized. 
+    The guassian distribution is used to generate the random values with sigma=0.06 as hard coded in `generate_mutate_individual` function
+    of `aiida_opsp.workflows.ga`."""
+    from copy import deepcopy
+
+    seed = f'{hash_dict(point)}_{seed}'
+    random.seed(seed)
+
+    value = point[key]
+
+    space = variable_info[key]['space']
+    ref_to = space.get('ref_to', None)
+    if ref_to is not None:
+        if ref_to not in fixture_variables and ref_to not in point:
+            raise ValueError(f'Cannot find {ref_to} in fixture_variables or point')
+            
+        try: 
+            ref_value = fixture_variables[ref_to]
+        except KeyError:
+            ref_value = point[ref_to]
+
+        var_range = [i + ref_value for i in space['range']]
+    else:
+        var_range = space['range']
+        
+    # set the low_bound and high_bound for the new value
+    low_bound, high_bound = var_range
+    while True:
+        # generate a new value with gaussian distribution until it is in the range
+        new_value = random.gauss(value, value * sigma)
+        if low_bound < new_value < high_bound:
+            break
+        
+    # deepcopy to avoid change the original point
+    new_point = deepcopy(point)
+    new_point[key] = new_value
+
+    individual = _restore_individual(new_point, fixture_variables)
+        
+    return individual
+
 
 def validate_individual(individual, variable_info):
     """Validate the individual"""
