@@ -172,7 +172,7 @@ class GenerateValidSimplexIndividual(_MixinGenerateValidIndividual):
         spec.input('init_point', valid_type=orm.Dict)
         spec.input('mutate_key', valid_type=orm.Str)
         spec.input('fixture_variables', valid_type=orm.Dict)
-        spec.input('sigma', valid_type=orm.Float, default=lambda: orm.Float(0.1))
+        spec.input('sigma', valid_type=orm.Float, default=lambda: orm.Float(0.06))
 
     def generate(self):
         # before generate and continue, check if the previous run is okay
@@ -331,7 +331,7 @@ def _restore_individual(point, fixture_variables):
         
     return individual
 
-def generate_simplex_individual(point, key, fixture_variables, variable_info: dict, sigma: float=0.1, seed=2022):
+def generate_simplex_individual(point, key, fixture_variables, variable_info: dict, sigma: float=0.06, seed=2022):
     """Create a simplex individual from the given point, where the other points are gaussians around.
     For the new point of the simplex only one variable is changed at a time.
     

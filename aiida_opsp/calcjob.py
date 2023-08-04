@@ -26,7 +26,6 @@ class OncvPseudoCalculation(CalcJob):
         spec.input('angular_momentum_settings', valid_type=orm.Dict)
         spec.input('local_potential_settings', valid_type=orm.Dict)
         spec.input('nlcc_settings', valid_type=orm.Dict) 
-        spec.input('run_atomic_test', valid_type=orm.Bool)
         spec.input('dump_psp', valid_type=orm.Bool)
         spec.input('weight_unbound', valid_type=orm.Float, default=lambda: orm.Float(0.1))
 
@@ -62,7 +61,6 @@ class OncvPseudoCalculation(CalcJob):
             angular_momentum_settings,
             local_potential_settings,
             nlcc_settings,
-            self.inputs.run_atomic_test.value,
         )
         
         with folder.open(self.options.input_filename, 'w', encoding='utf8') as handle:
@@ -86,7 +84,6 @@ class OncvPseudoCalculation(CalcJob):
         angular_momentum_settings,
         local_potential_settings,
         nlcc_settings,
-        is_atomic_test,
     ) -> str:
         inp = []
         # configuration setting
@@ -174,7 +171,7 @@ class OncvPseudoCalculation(CalcJob):
         rlmax = rcmax * 2
         inp.append(' '.join([str(rlmax), str(0.01)]))
         
-        if is_atomic_test:
+        try:
             # read and append verify card content to input by element
             # inp.append(verify_card(element))
             import_path = importlib.resources.path(
@@ -184,8 +181,8 @@ class OncvPseudoCalculation(CalcJob):
             with import_path as path, open(path, "r") as handle:
                 content = handle.read()
                 inp.append(content)
-        else:
-            # ncnf set to 0 for no process configuration test
+        except FileNotFoundError:
             inp.append('0')
+            
         
         return '\n'.join(inp)
