@@ -168,7 +168,8 @@ class OncvPseudoCalculation(CalcJob):
         inp.append('-12.0 12.0 0.02')
         
         inp.append('# rlmax drl')
-        rlmax = rcmax * 2
+        #rlmax = rcmax * 2
+        rlmax = 6.0
         inp.append(' '.join([str(rlmax), str(0.01)]))
         
         try:
