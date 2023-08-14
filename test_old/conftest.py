@@ -101,7 +101,7 @@ def generate_inputs_oncv(fixture_code):
             }
         )
         inputs = {
-            'code': fixture_code('opsp.pseudo.oncv'),
+            'code': fixture_code('opsp.pseudo.oncvpsp'),
             'conf_name': conf_name,
             'lmax': orm.Int(1),
             'angular_momentum_settings': angular_momentum_settings,
@@ -164,7 +164,7 @@ def generate_calc_job_node(fixture_localhost):
         return flat_inputs
 
     def _generate_calc_job_node(
-        entry_point_name='opsp.pseudo.oncv', computer=None, test_name=None, inputs=None, attributes=None
+        entry_point_name='opsp.pseudo.oncvpsp', computer=None, test_name=None, inputs=None, attributes=None
     ):
         """Fixture to generate a mock `CalcJobNode` for testing parsers.
         :param entry_point_name: entry point name of the calculation class

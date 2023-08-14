@@ -44,7 +44,7 @@ class OncvPseudoCalculation(CalcJob):
         
         spec.inputs['metadata']['options']['input_filename'].default = 'aiida.in'
         spec.inputs['metadata']['options']['output_filename'].default = 'aiida.out'
-        spec.inputs['metadata']['options']['parser_name'].default = 'opsp.pseudo.oncv'
+        spec.inputs['metadata']['options']['parser_name'].default = 'opsp.pseudo.oncvpsp'
         spec.inputs['metadata']['options']['resources'].default = {'num_machines': 1, 'num_mpiprocs_per_machine': 1}
         
     def prepare_for_submission(self, folder: Folder) -> CalcInfo:

@@ -1,8 +1,8 @@
 from aiida.common import datastructures
 
 def test_oncv_default(fixture_sandbox, generate_calc_job, generate_inputs_oncv, file_regression):
-    """Test a default `opsp.pseudo.oncv`."""
-    entry_point_name = 'opsp.pseudo.oncv'
+    """Test a default `opsp.pseudo.oncvpsp`."""
+    entry_point_name = 'opsp.pseudo.oncvpsp'
 
     inputs = generate_inputs_oncv()
     calc_info = generate_calc_job(fixture_sandbox, entry_point_name, inputs)
@@ -18,8 +18,8 @@ def test_oncv_default(fixture_sandbox, generate_calc_job, generate_inputs_oncv, 
     file_regression.check(input_written, encoding='utf-8', extension='.in')
     
 def test_oncv_with_test_configurations(fixture_sandbox, generate_calc_job, generate_inputs_oncv, file_regression):
-    """Test a inputs with test configurations `opsp.pseudo.oncv`."""
-    entry_point_name = 'opsp.pseudo.oncv'
+    """Test a inputs with test configurations `opsp.pseudo.oncvpsp`."""
+    entry_point_name = 'opsp.pseudo.oncvpsp'
 
     inputs = generate_inputs_oncv(True)
     calc_info = generate_calc_job(fixture_sandbox, entry_point_name, inputs)

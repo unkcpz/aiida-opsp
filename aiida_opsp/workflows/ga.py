@@ -2,9 +2,9 @@ import random
 
 from aiida import orm
 from aiida.engine import WorkChain, while_
+from aiida.plugins.entry_point import load_entry_point_from_string
 import math
 
-from aiida_opsp.workflows import load_object, PROCESS_INPUT_KWARGS
 from aiida_opsp.workflows.individual import GenerateRandomValidIndividual, GenerateMutateValidIndividual, GenerateCrossoverValidIndividual
 from aiida_opsp.utils.merge_input import individual_to_inputs
 
@@ -51,14 +51,13 @@ class GeneticAlgorithmWorkChain(WorkChain):
         """Specify imputs and outputs"""
         super().define(spec)
         spec.input('ga_parameters', valid_type=orm.Dict, validator=validate_ga_parameters)
-        spec.input('evaluate_process', help='Process which produces the result to be optimized.',
-            **PROCESS_INPUT_KWARGS)
+        spec.input('generate_evaluate_process', valid_type=orm.Str, help='Process which produces the pseudopotential, no need to get the score.')
+        spec.input('score_evaluate_process', valid_type=orm.Str, help='Process which produces the result to be optimized, produce the score of the sample.')
         spec.input('variable_info', valid_type=orm.Dict)
         spec.input('result_key', valid_type=orm.Str)   
         spec.input_namespace('fixture_inputs', required=False, dynamic=True)
 
-        spec.input('local_optimization_process', help='Process which produces the result to be optimized.',
-            **PROCESS_INPUT_KWARGS)
+        spec.input('local_optimization_process', valid_type=orm.Str, help='Process which produces the result to be optimized.')
         spec.input('local_optimization_parameters', valid_type=orm.Dict)
         
         spec.outline(
@@ -92,7 +91,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
         spec.output('final_individual', valid_type=orm.Dict)
         
         spec.exit_code(201, 'ERROR_PREPARE_INIT_POPULATION_FAILED', message='Failed to prepare init population')
-        spec.exit_code(202, 'ERROR_EVALUATE_PROCESS_FAILED', message='Failed to evaluate')
+        spec.exit_code(202, 'ERROR_SCORE_EVALUATE_PROCESS_FAILED', message='Failed to evaluate')
         spec.exit_code(203, 'ERROR_FITNESS_HAS_WRONG_NUM_OF_RESULTS', message='Fitness has wrong number of results')
         spec.exit_code(204, 'ERROR_MUTATE_NOT_FINISHED_OK', message='Mutate not finished okay')
         spec.exit_code(205, 'ERROR_NEW_INDIVIDUALS_NOT_FINISHED_OK', message='New individuals not finished okay')
@@ -124,10 +123,11 @@ class GeneticAlgorithmWorkChain(WorkChain):
         self.ctx.mediocre_individual_mutate_probability = ga_parameters['mediocre_individual_mutate_probability']
 
         # set base evaluate process
-        self.ctx.evaluate_process = load_object(self.inputs.evaluate_process.value)
+        self.ctx.generate_evaluate_process = load_entry_point_from_string(self.inputs.generate_evaluate_process.value)
+        self.ctx.score_evaluate_process = load_entry_point_from_string(self.inputs.score_evaluate_process.value)
 
-        # set base local optimization process
-        self.ctx.local_optimization_process = load_object(self.inputs.local_optimization_process.value)
+        # evaluate process for local optimization
+        self.ctx.local_optimize_evaluate_process = load_entry_point_from_string(self.inputs.local_optimization_parameters['evaluate_process'])
 
         # counting the best individual appear times by generations
         self.ctx.max_thebest_count = ga_parameters.get('max_thebest_count', self._MAX_THEBEST_COUNT)
@@ -139,7 +139,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
         
     def prepare_init_population_run(self):
         inputs = {
-            'evaluate_process': self.ctx.evaluate_process,
+            'evaluate_process': self.ctx.generate_evaluate_process,
             'variable_info': self.inputs.variable_info,
             'fixture_inputs': self.inputs.fixture_inputs,
         }
@@ -189,7 +189,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
         evaluates = dict()
         for idx, individual in enumerate(self.ctx.population):
             inputs = individual_to_inputs(individual, self.inputs.variable_info.get_dict(), self.inputs.fixture_inputs)
-            node = self.submit(self.ctx.evaluate_process, **inputs)
+            node = self.submit(self.ctx.score_evaluate_process, **inputs)
 
             retrive_key = f'_EVAL_IND_{idx}'
             
@@ -230,7 +230,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
                 if proc.exit_status == 201: # ERROR_PSPOT_HAS_NODE
                     scores[key] = math.inf
                 else:
-                    return self.exit_codes.ERROR_EVALUATE_PROCESS_FAILED
+                    return self.exit_codes.ERROR_SCORE_EVALUATE_PROCESS_FAILED
             else:
                 result_key = self.inputs.result_key.value
                 scores[key] = proc.outputs[result_key].value
@@ -304,7 +304,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
             return None
 
         inputs = {
-            'evaluate_process': self.ctx.evaluate_process,
+            'evaluate_process': self.ctx.generate_evaluate_process,
             'variable_info': self.inputs.variable_info,
             'fixture_inputs': self.inputs.fixture_inputs,
         }
@@ -359,7 +359,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
             return None
 
         inputs = {
-            'evaluate_process': self.ctx.evaluate_process,
+            'evaluate_process': self.ctx.generate_evaluate_process,
             'variable_info': self.inputs.variable_info,
             'fixture_inputs': self.inputs.fixture_inputs,
         }
@@ -425,7 +425,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
             return None
         
         inputs = {
-            'evaluate_process': self.ctx.evaluate_process,
+            'evaluate_process': self.ctx.generate_evaluate_process,
             'variable_info': self.inputs.variable_info,
             'fixture_inputs': self.inputs.fixture_inputs,
         }
@@ -474,7 +474,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
             return None
         
         inputs = {
-            'evaluate_process': self.ctx.evaluate_process,
+            'evaluate_process': self.ctx.local_optimize_evaluate_process,
             'variable_info': self.inputs.variable_info,
             'fixture_inputs': self.inputs.fixture_inputs,
         }
@@ -506,8 +506,12 @@ class GeneticAlgorithmWorkChain(WorkChain):
             self.report(f"Retriving output for evaluation {retrive_key}")
             node = self.ctx[retrive_key]
             if not node.is_finished_ok:
-                self.report(f'node {node.pk} is not finished ok')
-                return self.exit_codes.ERROR_LOCAL_OPTIMIZATION_NOT_FINISHED_OK
+                self.logger.warning(f'node {node.pk} is not finished ok')
+
+                # There is chance that for some very unlucky individuals, the local optimization process is not finished ok.
+                # We don't want to stop the whole process because of this, so we just ignore this individual and use the original one.
+                # Those are usually the individuals that are not very good, the low quality ones means it will be replaced by the new individuals in the next generation.
+                population.append(node.inputs['init_individual'].get_dict())
             else:
                 population.append(node.outputs['final_individual'].get_dict())
                     

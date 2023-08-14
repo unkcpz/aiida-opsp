@@ -1,6 +1,6 @@
 label: "oncv4"
 description: "ONCV 4.0.1"
-default_calc_job_plugin: "opsp.pseudo.oncv"
+default_calc_job_plugin: "opsp.pseudo.oncvpsp"
 filepath_executable: "oncvpsp.x"
 computer: "dockerhost"
 engine_command: "docker run -i --rm -v $PWD:/workdir:rw -u 1001:1001 -w /workdir {image_name} sh -c"
