@@ -53,6 +53,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
         spec.input('ga_parameters', valid_type=orm.Dict, validator=validate_ga_parameters)
         spec.input('generate_evaluate_process', valid_type=orm.Str, help='Process which produces the pseudopotential, no need to get the score.')
         spec.input('score_evaluate_process', valid_type=orm.Str, help='Process which produces the result to be optimized, produce the score of the sample.')
+        spec.input_namespace('score_evaluate_parameters', required=False, dynamic=True)
         spec.input('variable_info', valid_type=orm.Dict)
         spec.input('result_key', valid_type=orm.Str)   
         spec.input_namespace('fixture_inputs', required=False, dynamic=True)
@@ -188,7 +189,13 @@ class GeneticAlgorithmWorkChain(WorkChain):
         # submit evaluation for the individuals of a population
         evaluates = dict()
         for idx, individual in enumerate(self.ctx.population):
-            inputs = individual_to_inputs(individual, self.inputs.variable_info.get_dict(), self.inputs.fixture_inputs)
+            oncvpsp_inputs = individual_to_inputs(individual, self.inputs.variable_info.get_dict(), self.inputs.fixture_inputs)
+            if 'score_evaluate_parameters' not in self.inputs:
+                inputs = oncvpsp_inputs
+            else:
+                inputs = dict(self.inputs.score_evaluate_parameters)
+                inputs['oncvpsp'] = oncvpsp_inputs
+
             node = self.submit(self.ctx.score_evaluate_process, **inputs)
 
             retrive_key = f'_EVAL_IND_{idx}'
@@ -227,7 +234,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
                 # - the parameters are not proper, this should result the bad score for the GA input
                 # - the evalute process failed for resoure reason, should raise and reported.
                 # - TODO: Test configuration 0 is get but no other configuration results -> check what output look like
-                if proc.exit_status == 201: # ERROR_PSPOT_HAS_NODE
+                if proc.exit_status > 200: # All the exit code > 200 are considered as evaluation error and set the score to inf
                     scores[key] = math.inf
                 else:
                     return self.exit_codes.ERROR_SCORE_EVALUATE_PROCESS_FAILED

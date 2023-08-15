@@ -164,7 +164,10 @@ class OncvPseudoParser(Parser):
             upf_txt = '\n'.join(upf_lines)
             
             
-            pseudo = UpfData.get_or_create(io.BytesIO(upf_txt.encode('utf-8')))
+            #pseudo = UpfData.get_or_create(io.BytesIO(upf_txt.encode('utf-8')))
+            source = io.BytesIO(upf_txt.encode('utf-8'))
+            source.seek(0)
+            pseudo = UpfData(source, filename="pseudo.upf")
             self.out('output_pseudo', pseudo)
             
         for error_label in [

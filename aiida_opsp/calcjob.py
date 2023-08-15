@@ -26,7 +26,7 @@ class OncvPseudoCalculation(CalcJob):
         spec.input('angular_momentum_settings', valid_type=orm.Dict)
         spec.input('local_potential_settings', valid_type=orm.Dict)
         spec.input('nlcc_settings', valid_type=orm.Dict) 
-        spec.input('dump_psp', valid_type=orm.Bool)
+        spec.input('dump_psp', valid_type=orm.Bool, required=False)
         spec.input('weight_unbound', valid_type=orm.Float, default=lambda: orm.Float(0.1))
 
         spec.output('output_parameters', valid_type=orm.Dict)
