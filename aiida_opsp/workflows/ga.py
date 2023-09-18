@@ -1,7 +1,7 @@
 import random
 
 from aiida import orm
-from aiida.engine import WorkChain, while_
+from aiida.engine import WorkChain, while_, if_
 from aiida.plugins.entry_point import load_entry_point_from_string
 import math
 
@@ -58,8 +58,8 @@ class GeneticAlgorithmWorkChain(WorkChain):
         spec.input('result_key', valid_type=orm.Str)   
         spec.input_namespace('fixture_inputs', required=False, dynamic=True)
 
-        spec.input('local_optimization_process', valid_type=orm.Str, help='Process which produces the result to be optimized.')
-        spec.input('local_optimization_parameters', valid_type=orm.Dict)
+        spec.input('local_optimization_process', valid_type=orm.Str, help='Process which produces the result to be optimized.', required=False)
+        spec.input('local_optimization_parameters', valid_type=orm.Dict, required=False)
         
         spec.outline(
             cls.init_setup,
@@ -82,8 +82,10 @@ class GeneticAlgorithmWorkChain(WorkChain):
                 cls.new_individuals_run,
                 cls.new_individuals_inspect,
                 cls.combine_population,
-                cls.local_optimization_run,
-                cls.local_optimization_inspect,
+                if_(cls.should_run_local_optimization)(
+                    cls.local_optimization_run,
+                    cls.local_optimization_inspect,
+                ),
                 # ----------------- selection -----------------
             ),
             cls.finalize,   # stop iteration and get results
@@ -128,7 +130,13 @@ class GeneticAlgorithmWorkChain(WorkChain):
         self.ctx.score_evaluate_process = load_entry_point_from_string(self.inputs.score_evaluate_process.value)
 
         # evaluate process for local optimization
-        self.ctx.local_optimize_evaluate_process = load_entry_point_from_string(self.inputs.local_optimization_parameters['evaluate_process'])
+        if 'local_optimization_process' in self.inputs:
+            self._should_run_local_optimization = True
+            
+            self.ctx.local_optimization_process = load_entry_point_from_string(self.inputs.local_optimization_process.value) # nelder_mead
+            self.ctx.local_optimize_evaluate_process = load_entry_point_from_string(self.inputs.local_optimization_parameters['evaluate_process']) # inner evaluate process
+        else:
+            self._should_run_local_optimization = False
 
         # counting the best individual appear times by generations
         self.ctx.max_thebest_count = ga_parameters.get('max_thebest_count', self._MAX_THEBEST_COUNT)
@@ -283,7 +291,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
             self.ctx.should_continue = False
 
         # the best fitness is not improved for a maximum times, stop the optimization
-        epsilon = 1e-6
+        epsilon = 1e-3
         thebest = list(self.ctx.sorted_scores.values())[0]
         if 'thebest' not in self.ctx:
             # the first generation
@@ -298,7 +306,8 @@ class GeneticAlgorithmWorkChain(WorkChain):
             # the best fitness is not improved
             self.ctx.thebest_count += 1
         else:
-            raise RuntimeError(f'The best score is increase, should not happen. {self.ctx.thebest} -> {thebest}')
+            self.ctx.thebest_count = 0
+            self.logger.warning(f'The best score is increase, happened because local minimization make it worse in SSSP verification. Chaning {self.ctx.thebest} -> {thebest}, check if it is a problem.')
 
         if self.ctx.thebest_count > self.ctx.max_thebest_count:
             self.report(f'The best score is not improved for {self.ctx.thebest_count} times, stopping.')
@@ -474,6 +483,10 @@ class GeneticAlgorithmWorkChain(WorkChain):
 
         self.ctx.population = self.ctx.elite_individuals + self.ctx.mutate_elite_individuals + self.ctx.mutate_mediocre_individuals + self.ctx.new_individuals
 
+    def should_run_local_optimization(self):
+        """The condition to run local optimization"""
+        # run local optimization every 5 generations
+        return self._should_run_local_optimization and self.ctx.current_generation % 5 == 0
         
     def local_optimization_run(self):
         """local optimization for the population"""

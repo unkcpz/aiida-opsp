@@ -1,4 +1,4 @@
-from aiida.engine import WorkChain, ToContext
+from aiida.engine import WorkChain, ToContext, calcfunction
 from aiida import orm
 
 from aiida_opsp.calcjob import OncvPseudoCalculation
@@ -60,7 +60,7 @@ class SSSPVerificationWorkChain(WorkChain):
                 return self.exit_codes.ERROR_GENERATE_PSEUDO_FAILED
 
         self.out_many(
-            self.exposed_outputs(workchain, OncvPseudoCalculation)
+            self.exposed_outputs(workchain, OncvPseudoCalculation, namespace='oncvpsp')
         )
 
         # Get the pseudopotential
@@ -107,11 +107,17 @@ class SSSPVerificationWorkChain(WorkChain):
             )
         )
 
-        self.ctx.conf_nu_mapping = dict()
-        for key, value in workchain.outputs.output_parameters.get_dict().items():
-            nu = value['nu']
-            self.ctx.conf_nu_mapping[key] = nu
+        self.ctx.sssp_output_parameters = workchain.outputs.output_parameters
             
     def finalize(self):
         # calculate the result from the mapping we use the maximum nu of all configurations
-        self.out('result', orm.Float(max(self.ctx.conf_nu_mapping.values())))
+        result = get_max_nu(self.ctx.sssp_output_parameters)
+        self.out('result', result)
+
+@calcfunction
+def get_max_nu(output_parameters):
+    nu_lst = list()
+    for value in output_parameters.get_dict().values():
+        nu_lst.append(value['nu'])
+        
+    return orm.Float(max(nu_lst))

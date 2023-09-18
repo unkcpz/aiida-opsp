@@ -5,8 +5,8 @@ from aiida.plugins import WorkflowFactory
 SSSPVerificationWorkChain = WorkflowFactory('opsp.verify.sssp')
 
 code = orm.load_code('oncv4@localhost')
-#pw_code = orm.load_code('pw-7.1@localhost')
-pw_code = orm.load_code('pw-7.0@daint-mc-mrcloud')
+pw_code = orm.load_code('pw-7.1@localhost')
+#pw_code = orm.load_code('pw-7.0@daint-mc-mrcloud')
 conf_name = orm.Str('Li-low')
 
 angular_momentum_settings = orm.Dict(
@@ -57,12 +57,12 @@ def run():
         },
         'sssp': {
             'code': pw_code,
-            'wavefunction_cutoff': orm.Float(50.0),
-            'charge_density_cutoff': orm.Float(200.0),
-            'protocol': orm.Str('opsp'),
+            'wavefunction_cutoff': orm.Float(30.0),
+            'charge_density_cutoff': orm.Float(120.0),
+            'protocol': orm.Str('test'),
             'configurations': orm.List(list=['XO', 'BCC']),
-            'parallelization': orm.Dict(dict={'npool': 4}),
-            'options': orm.Dict(dict={'resources': {'num_machines': 1, 'num_mpiprocs_per_machine': 32}, 'max_wallclock_seconds': 3600}),
+            'parallelization': orm.Dict(dict={'npool': 1}),
+            'options': orm.Dict(dict={'resources': {'num_machines': 1, 'num_mpiprocs_per_machine': 1}, 'max_wallclock_seconds': 3600}),
         }
     }
     res, pk = run_get_pk(SSSPVerificationWorkChain, **inputs)
