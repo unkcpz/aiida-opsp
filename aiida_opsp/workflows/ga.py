@@ -237,6 +237,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
             self.report(f'Retrieving output for evaluation {key}')
 
             proc: orm.WorkChainNode = self.ctx[key]
+            individuals[key] = proc.base.extras.get('individual')
             if not proc.is_finished_ok:
                 # When evaluate process failed it can be
                 # - the parameters are not proper, this should result the bad score for the GA input
@@ -249,7 +250,6 @@ class GeneticAlgorithmWorkChain(WorkChain):
             else:
                 result_key = self.inputs.result_key.value
                 scores[key] = proc.outputs[result_key].value
-                individuals[key] = proc.base.extras.get('individual')
             
         # scores store the results of individual score of a population of this generation
         if len(scores) != self.ctx.num_individuals:
