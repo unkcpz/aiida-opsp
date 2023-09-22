@@ -9,5 +9,6 @@ work_dir: "/scratch/{username}/aiida_run/"
 shebang: "#!/bin/bash"
 mpirun_command: "mpirun -np {tot_num_mpiprocs}"
 mpiprocs_per_machine: 8
+use_double_quotes: true
 prepend_text: " "
 append_text: " "

@@ -125,6 +125,9 @@ class GeneticAlgorithmWorkChain(WorkChain):
         self.ctx.elite_individual_mutate_probability = ga_parameters['elite_individual_mutate_probability']
         self.ctx.mediocre_individual_mutate_probability = ga_parameters['mediocre_individual_mutate_probability']
 
+        individual_generate_max_iteration = ga_parameters.get('individual_generate_max_iteration', 20)
+        self.ctx.individual_generate_max_iteration = orm.Int(individual_generate_max_iteration)
+
         # set base evaluate process
         self.ctx.generate_evaluate_process = load_entry_point_from_string(self.inputs.generate_evaluate_process.value)
         self.ctx.score_evaluate_process = load_entry_point_from_string(self.inputs.score_evaluate_process.value)
@@ -135,6 +138,8 @@ class GeneticAlgorithmWorkChain(WorkChain):
             
             self.ctx.local_optimization_process = load_entry_point_from_string(self.inputs.local_optimization_process.value) # nelder_mead
             self.ctx.local_optimize_evaluate_process = load_entry_point_from_string(self.inputs.local_optimization_parameters['evaluate_process']) # inner evaluate process
+            # local optimization interval is for how many generations to run local optimization once
+            self.ctx.local_optimization_interval = self.inputs.local_optimization_parameters.get_dict().get('interval', 1)
         else:
             self._should_run_local_optimization = False
 
@@ -151,6 +156,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
             'evaluate_process': self.ctx.generate_evaluate_process,
             'variable_info': self.inputs.variable_info,
             'fixture_inputs': self.inputs.fixture_inputs,
+            'max_iteration': self.ctx.individual_generate_max_iteration,
         }
 
         evaluates = dict()
@@ -323,6 +329,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
             'evaluate_process': self.ctx.generate_evaluate_process,
             'variable_info': self.inputs.variable_info,
             'fixture_inputs': self.inputs.fixture_inputs,
+            'max_iteration': self.ctx.individual_generate_max_iteration,
         }
         
         evaluates = dict()
@@ -378,6 +385,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
             'evaluate_process': self.ctx.generate_evaluate_process,
             'variable_info': self.inputs.variable_info,
             'fixture_inputs': self.inputs.fixture_inputs,
+            'max_iteration': self.ctx.individual_generate_max_iteration,
         }
         
         evaluates = dict()
@@ -444,6 +452,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
             'evaluate_process': self.ctx.generate_evaluate_process,
             'variable_info': self.inputs.variable_info,
             'fixture_inputs': self.inputs.fixture_inputs,
+            'max_iteration': self.ctx.individual_generate_max_iteration,
         }
         
         evaluates = dict()
@@ -486,7 +495,10 @@ class GeneticAlgorithmWorkChain(WorkChain):
     def should_run_local_optimization(self):
         """The condition to run local optimization"""
         # run local optimization every 5 generations
-        return self._should_run_local_optimization and self.ctx.current_generation % 5 == 0
+        if not self._should_run_local_optimization:
+            return False
+        else:
+            return self.ctx.current_generation % self.ctx.local_optimization_interval == 0
         
     def local_optimization_run(self):
         """local optimization for the population"""

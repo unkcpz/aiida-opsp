@@ -42,7 +42,7 @@ def create_weights(xs, fd1: Fd_Params, fd2: Fd_Params):
     
     return weights
 
-def compute_lderr(atan_logders, lmax, weight_unbound=0.1):
+def compute_lderr(atan_logders, lmax, weight_unbound=0.1, fd_min=0.0, fd_max=6.0):
     """
     We having this function to process the atan logder in advance since we 
     don't want to store lots of data in the file repository.
@@ -50,8 +50,8 @@ def compute_lderr(atan_logders, lmax, weight_unbound=0.1):
     Using four values to construct the fermi-dirac functions for weight the function.
     Four values are hard coded.
     """
-    fd1 = Fd_Params._make([0.0, 0.25, True])
-    fd2 = Fd_Params._make([6.0, 0.25, False])
+    fd1 = Fd_Params._make([fd_min, 0.25, True])
+    fd2 = Fd_Params._make([fd_max, 0.25, False])
 
     ldderr = 0.0
     for l in atan_logders.ae:
@@ -96,7 +96,7 @@ class OncvPseudoParser(Parser):
             try:
                 abi_parser.scan()
                 
-                lderr = compute_lderr(abi_parser.atan_logders, abi_parser.lmax, self.node.inputs.weight_unbound.value)
+                lderr = compute_lderr(abi_parser.atan_logders, abi_parser.lmax, self.node.inputs.weight_unbound.value, fd_max=self.node.inputs.fd_max.value)
             except:
                 # not finish okay therefore not parsed
                 # TODO re-check the following exit states, will be override by this one
@@ -119,6 +119,7 @@ class OncvPseudoParser(Parser):
         output_parameters['max_atan_logder_l1err'] = float(results['max_atan_logder_l1err'])
         output_parameters['max_ecut'] = float(results['max_ecut'])
         output_parameters['weight_unbound'] = self.node.inputs.weight_unbound.value
+        output_parameters['fd_max'] = self.node.inputs.fd_max.value
         
         # Separate the input string into separate lines
         data_lines = stdout.split('\n') 

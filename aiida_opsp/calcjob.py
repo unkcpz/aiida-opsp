@@ -28,6 +28,7 @@ class OncvPseudoCalculation(CalcJob):
         spec.input('nlcc_settings', valid_type=orm.Dict) 
         spec.input('dump_psp', valid_type=orm.Bool, required=False)
         spec.input('weight_unbound', valid_type=orm.Float, default=lambda: orm.Float(0.1))
+        spec.input('fd_max', valid_type=orm.Float, default=lambda: orm.Float(6.0))
 
         spec.output('output_parameters', valid_type=orm.Dict)
         spec.output('output_pseudo', valid_type=UpfData, required=False)
@@ -156,9 +157,7 @@ class OncvPseudoCalculation(CalcJob):
         
         inp.append('# MODEL CORE CHARGE')
         icmod = nlcc_settings.get('icmod')
-        fcfact = nlcc_settings.get('fcfact', None)
-        if not fcfact:
-            raise "fcfact can't be empty."
+        fcfact = nlcc_settings.get('fcfact', 0.0)
         rcfact = nlcc_settings.get('rcfact', '')
         lst = [icmod, fcfact, rcfact]
         inp.append(' '.join(str(e) for e in lst))

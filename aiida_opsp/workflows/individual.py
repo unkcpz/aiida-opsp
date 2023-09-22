@@ -49,10 +49,12 @@ class _MixinGenerateValidIndividual(WorkChain):
         self.ctx.should_continue = True
 
         if self._BASE_SEED_MUTIPLIER is None:
-            self._BASE_SEED_MUTIPLIER = int.from_bytes(self.__class__.__name__.encode('utf-8'), 'little')
+            self.ctx.base_seed_multiplier = int.from_bytes(self.__class__.__name__.encode('utf-8'), 'little')
+        else:
+            self.ctx.base_seed_multiplier = self._BASE_SEED_MUTIPLIER
 
         # the seed need to be update upon the iter number, otherwise will always give the same result
-        self.ctx.seed = self.inputs.seed.value + self._BASE_SEED_MUTIPLIER
+        self.ctx.seed = self.inputs.seed.value + self.ctx.base_seed_multiplier
 
     def should_continue(self):
         if not self.ctx.count < self.inputs.max_iteration.value:
@@ -78,7 +80,7 @@ class _MixinGenerateValidIndividual(WorkChain):
         self.ctx.count += 1
 
         # update the seed to generate new input
-        self.ctx.seed += self.ctx.count * self._BASE_SEED_MUTIPLIER
+        self.ctx.seed += self.ctx.count * self.ctx.base_seed_multiplier
         
         return ToContext(evaluate=process)
     

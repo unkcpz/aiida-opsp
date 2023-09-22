@@ -52,6 +52,7 @@ def run():
         'run_atomic_test': orm.Bool(True),
         'dump_psp': orm.Bool(False),
         'weight_unbound': orm.Float(1.0),
+        'fd_max': orm.Float(6.0),
     }
     res, pk = run_get_pk(OncvPseudoBaseWorkChain, **inputs)
     
