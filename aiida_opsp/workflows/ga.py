@@ -134,14 +134,14 @@ class GeneticAlgorithmWorkChain(WorkChain):
 
         # evaluate process for local optimization
         if 'local_optimization_process' in self.inputs:
-            self._should_run_local_optimization = True
+            self.ctx._should_run_local_optimization = True
             
             self.ctx.local_optimization_process = load_entry_point_from_string(self.inputs.local_optimization_process.value) # nelder_mead
             self.ctx.local_optimize_evaluate_process = load_entry_point_from_string(self.inputs.local_optimization_parameters['evaluate_process']) # inner evaluate process
             # local optimization interval is for how many generations to run local optimization once
             self.ctx.local_optimization_interval = self.inputs.local_optimization_parameters.get_dict().get('interval', 1)
         else:
-            self._should_run_local_optimization = False
+            self.ctx._should_run_local_optimization = False
 
         # counting the best individual appear times by generations
         self.ctx.max_thebest_count = ga_parameters.get('max_thebest_count', self._MAX_THEBEST_COUNT)
@@ -495,7 +495,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
     def should_run_local_optimization(self):
         """The condition to run local optimization"""
         # run local optimization every 5 generations
-        if not self._should_run_local_optimization:
+        if not self.ctx._should_run_local_optimization:
             return False
         else:
             return self.ctx.current_generation % self.ctx.local_optimization_interval == 0
