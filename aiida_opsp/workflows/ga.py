@@ -108,7 +108,7 @@ class GeneticAlgorithmWorkChain(WorkChain):
         ga_parameters = self.inputs.ga_parameters.get_dict()
         
         # init current optimize session aka generation in GA
-        self.ctx.current_generation = 0
+        self.ctx.current_generation = 1
 
         self.ctx.should_continue = True
         
