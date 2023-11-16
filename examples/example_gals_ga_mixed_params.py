@@ -1,5 +1,4 @@
 from aiida.engine import run_get_pk
-from aiida.engine import calcfunction
 from aiida import orm
 
 from aiida_opsp.workflows.ga import GeneticAlgorithmWorkChain
