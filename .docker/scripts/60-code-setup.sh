@@ -21,3 +21,5 @@ for code_name in pw ph; do
         --computer localhost --prepend-text 'eval "$(conda shell.posix hook)"\nconda activate base\nexport OMP_NUM_THREADS=1' \
         --filepath-executable ${code_name}.x
 done
+
+# TODO: oncvpsp calcjob and caching.

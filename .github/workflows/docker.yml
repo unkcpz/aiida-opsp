@@ -69,8 +69,8 @@ jobs:
               uses: docker/login-action@v2
               with:
                   registry: ghcr.io
-                  username: ${{ secrets.GHCR_USERNAME }}
-                  password: ${{ secrets.GHCR_TOKEN }}
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Set tags for image and push 🏷️📤💾
               if: always()
