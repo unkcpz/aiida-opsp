@@ -2,7 +2,7 @@ from aiida.engine import run_get_pk
 from aiida import orm
 from aiida_opsp.workflows.psp_oncv import OncvPseudoBaseWorkChain
 
-code = orm.load_code('oncv4@localhost')
+code = orm.load_code('oncvpsp@localhost')
 conf_name = orm.Str('Li-low')
 
 angular_momentum_settings = orm.Dict(

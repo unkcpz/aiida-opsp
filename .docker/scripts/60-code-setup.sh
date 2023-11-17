@@ -23,3 +23,11 @@ for code_name in pw ph; do
 done
 
 # TODO: oncvpsp calcjob and caching.
+verdi config set -a caching.enabled_for aiida.calculations:oncvpsp.pseudo.oncvpsp
+verdi code create core.code.installed \
+    --non-interactive \ 
+    --label oncvpsp \
+    --description "oncvpsp.x code on locolhast" \
+    --default-calc-job-plugin oncvpsp.pseudo.oncvpsp \
+    --computer localhost \
+    --filepath-executable /usr/local/bin/oncvpsp.x
