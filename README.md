@@ -1,7 +1,9 @@
 # aiida-opsp
 
-Please turn on the caching:
+[![Documentation Status](https://readthedocs.org/projects/aiida-opsp/badge/?version=latest)](https://aiida-opsp.readthedocs.io/en/latest/?badge=latest)
 
-```bash
-verdi config set caching.default_enabled True
-```
+Check our [documentation](https://aiida-opsp.readthedocs.io/en/latest/) for more information.
+
+## Contact
+
+📧 email: jusong.yu@psi.ch
